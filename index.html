@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PERMINTAAN-JABAR Management System</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="app" class="app-container">
+        <!-- Navigation -->
+        <nav class="navbar">
+            <div class="navbar-brand">
+                <h1>PERMINTAAN-JABAR</h1>
+                <span class="user-info" id="userInfo"></span>
+            </div>
+            <div class="navbar-menu">
+                <button class="nav-btn active" data-dashboard="umum">Dashboard UMUM</button>
+                <button class="nav-btn" data-dashboard="dm">Dashboard DM</button>
+                <button class="nav-btn" data-dashboard="service">Dashboard SERVICE</button>
+                <button class="nav-btn logout" id="logoutBtn">Logout</button>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Dashboard UMUM (Sales) -->
+            <div id="dashboard-umum" class="dashboard active">
+                <div class="dashboard-header">
+                    <h2>Dashboard UMUM - Input Permintaan</h2>
+                </div>
+                
+                <div class="dashboard-body">
+                    <!-- Status Summary -->
+                    <div class="status-summary">
+                        <div class="status-card">
+                            <span class="status-label">PENDING</span>
+                            <span class="status-count" id="count-pending">0</span>
+                        </div>
+                        <div class="status-card">
+                            <span class="status-label">APPROVE</span>
+                            <span class="status-count" id="count-approve">0</span>
+                        </div>
+                        <div class="status-card">
+                            <span class="status-label">REJECT</span>
+                            <span class="status-count" id="count-reject">0</span>
+                        </div>
+                        <div class="status-card">
+                            <span class="status-label">DONE</span>
+                            <span class="status-count" id="count-done">0</span>
+                        </div>
+                    </div>
+
+                    <!-- Input Form -->
+                    <div class="form-section">
+                        <h3>Form Input Permintaan</h3>
+                        <form id="requestForm" class="form-container">
+                            <!-- Row 1: Tanggal & Nama Toko -->
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="tanggal">Tanggal:</label>
+                                    <input type="date" id="tanggal" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="namaToko">Nama Toko:</label>
+                                    <select id="namaToko" required>
+                                        <option value="">-- Pilih Toko --</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Row 2: Sales & Area -->
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="sales">Nama Sales:</label>
+                                    <input type="text" id="sales" readonly>
+                                </div>
+                                <div class="form-group">
+                                    <label for="area">Area Service:</label>
+                                    <input type="text" id="area" readonly>
+                                </div>
+                            </div>
+
+                            <!-- Row 3: Type Unit & Seri Unit -->
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="typeUnit">Type Unit:</label>
+                                    <select id="typeUnit" required>
+                                        <option value="">-- Pilih Type --</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="seriUnit">Seri Unit:</label>
+                                    <input type="text" id="seriUnit" required>
+                                </div>
+                            </div>
+
+                            <!-- Detail Barang (Dynamic Table) -->
+                            <div class="form-group">
+                                <label>Detail Barang:</label>
+                                <div class="table-wrapper">
+                                    <table id="barangTable" class="barang-table">
+                                        <thead>
+                                            <tr>
+                                                <th>No</th>
+                                                <th>Barang</th>
+                                                <th>Qty</th>
+                                                <th>Alasan</th>
+                                                <th>Aksi</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="barangTableBody">
+                                            <tr class="barang-row">
+                                                <td class="row-number">1</td>
+                                                <td><input type="text" class="barang-input" placeholder="Nama barang"></td>
+                                                <td><input type="number" class="qty-input" placeholder="Qty" min="1" value="1"></td>
+                                                <td><input type="text" class="alasan-input" placeholder="Alasan"></td>
+                                                <td>
+                                                    <button type="button" class="btn-delete-row" style="display:none;">Hapus</button>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <button type="button" id="addRowBtn" class="btn-secondary">+ Tambah Barang</button>
+                            </div>
+
+                            <!-- Image Upload -->
+                            <div class="form-group">
+                                <label for="imageUpload">Upload Gambar:</label>
+                                <div class="image-upload-wrapper">
+                                    <input type="file" id="imageUpload" accept="image/*">
+                                    <div id="imagePreview" class="image-preview"></div>
+                                </div>
+                            </div>
+
+                            <!-- Action Buttons -->
+                            <div class="form-actions">
+                                <button type="submit" class="btn-primary">Simpan</button>
+                                <button type="reset" class="btn-secondary">Reset</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Data Table -->
+                    <div class="data-section">
+                        <h3>Data Permintaan</h3>
+                        <div class="table-wrapper">
+                            <table id="dataTable" class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>No Surat</th>
+                                        <th>Tanggal</th>
+                                        <th>Toko</th>
+                                        <th>Type</th>
+                                        <th>Seri</th>
+                                        <th>Status</th>
+                                        <th>Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dataTableBody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard DM -->
+            <div id="dashboard-dm" class="dashboard">
+                <div class="dashboard-header">
+                    <h2>Dashboard DM - Review & Approval</h2>
+                </div>
+                
+                <div class="dashboard-body">
+                    <div class="status-summary">
+                        <div class="status-card">
+                            <span class="status-label">PENDING</span>
+                            <span class="status-count" id="count-pending-dm">0</span>
+                        </div>
+                        <div class="status-card">
+                            <span class="status-label">APPROVE</span>
+                            <span class="status-count" id="count-approve-dm">0</span>
+                        </div>
+                        <div class="status-card">
+                            <span class="status-label">REJECT</span>
+                            <span class="status-count" id="count-reject-dm">0</span>
+                        </div>
+                    </div>
+
+                    <div class="table-wrapper">
+                        <table id="dmDataTable" class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>No Surat</th>
+                                    <th>Tanggal</th>
+                                    <th>Toko</th>
+                                    <th>Status Service</th>
+                                    <th>Status DM</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dmDataTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Modal untuk Approval -->
+                    <div id="approvalModal" class="modal" style="display:none;">
+                        <div class="modal-content">
+                            <span class="close">&times;</span>
+                            <h3>Approval Permintaan</h3>
+                            <div id="approvalContent"></div>
+                            <div class="modal-actions">
+                                <button id="approveBtn" class="btn-primary">Approve</button>
+                                <button id="rejectBtn" class="btn-danger">Reject</button>
+                                <button id="cancelBtn" class="btn-secondary">Batal</button>
+                            </div>
+                            <div id="rejectReasonField" style="display:none; margin-top:20px;">
+                                <label for="rejectReason">Alasan Penolakan:</label>
+                                <textarea id="rejectReason" rows="4" placeholder="Masukkan alasan penolakan"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard SERVICE -->
+            <div id="dashboard-service" class="dashboard">
+                <div class="dashboard-header">
+                    <h2>Dashboard SERVICE - Verifikasi & Proses</h2>
+                </div>
+                
+                <div class="dashboard-body">
+                    <div class="status-summary">
+                        <div class="status-card">
+                            <span class="status-label">PENDING</span>
+                            <span class="status-count" id="count-pending-service">0</span>
+                        </div>
+                        <div class="status-card">
+                            <span class="status-label">APPROVE</span>
+                            <span class="status-count" id="count-approve-service">0</span>
+                        </div>
+                        <div class="status-card">
+                            <span class="status-label">DONE</span>
+                            <span class="status-count" id="count-done-service">0</span>
+                        </div>
+                    </div>
+
+                    <div class="table-wrapper">
+                        <table id="serviceDataTable" class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>No Surat</th>
+                                    <th>Tanggal</th>
+                                    <th>Toko</th>
+                                    <th>Status</th>
+                                    <th>Status DM</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="serviceDataTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Notification -->
+    <div id="notification" class="notification" style="display:none;"></div>
+
+    <!-- Scripts -->
+    <script src="sheets/config.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/whatsapp.js"></script>
+    <script src="js/pdf.js"></script>
+    <script src="js/dashboard-umum.js"></script>
+    <script src="js/dashboard-dm.js"></script>
+    <script src="js/dashboard-service.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
