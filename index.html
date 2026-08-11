@@ -1,284 +1,1182 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PERMINTAAN-JABAR Management System</title>
-    <link rel="stylesheet" href="css/style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>PERMINTAAN TOKO</title>
+
+  <!-- Google Fonts: Poppins & Material Symbols Rounded -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0" />
+
+  <!-- Libraries -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- Master Stylesheet -->
+  <link rel="stylesheet" href="styles.css?v=20260811_v1370">
+  <script src="app.js?v=20260811_v1374"></script>
+
+  <!-- Firebase App, Firestore & Realtime Database Web SDK (Compat Mode) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
 </head>
-<body>
-    <div id="app" class="app-container">
-        <!-- Navigation -->
-        <nav class="navbar">
-            <div class="navbar-brand">
-                <h1>PERMINTAAN-JABAR</h1>
-                <span class="user-info" id="userInfo"></span>
+<body class="dark-mode">
+
+  <!-- TOP-RIGHT HEADER ACTIONS CONTAINER (ALIGNED FLUSH TO RIGHT CARD BOUNDARY) -->
+  <div id="topHeaderActions" class="top-header-actions">
+    <!-- BULAT KECIL INDIKATOR STATUS ONLINE (KONEK / DISKONEK) -->
+    <div id="firebaseOnlineDot" title="STATUS SERVER ONLINE: TERHUBUNG" style="width: 10px; height: 10px; border-radius: 50%; background: #10b981; box-shadow: 0 0 8px #10b981; flex-shrink: 0; cursor: pointer; transition: all 0.3s; align-self: flex-start; margin-top: 4px; pointer-events: auto !important;" onclick="showNotif('STATUS SISTEM ONLINE: TERHUBUNG', 'success')"></div>
+
+    <button id="helpButton" class="helpButton" onclick="bukaBantuan()" title="PUSAT BANTUAN & CHAT" style="display: none;">
+      <span class="material-symbols-rounded">support_agent</span>
+      <span id="unreadBadge" class="unreadBadge" style="display:none;">0</span>
+    </button>
+    <button id="notifBellBtn" type="button" class="notif-bell-btn" onclick="bukaNotificationModal()" title="NOTIFIKASI SISTEM REAL-TIME" style="display: none;">
+      <span class="material-symbols-rounded">notifications</span>
+      <span id="notifBellBadge" class="notif-bell-badge" style="display:none;">0</span>
+    </button>
+  </div>
+  <!-- POPUP DAFTAR NOTIFIKASI SISTEM (STANDAR SAMA DENGAN POPUP NOTIFCARD) -->
+  <div id="popupNotifList" class="popupOverlay">
+    <div class="popupNotifCard" style="width: 500px; max-width: 92vw; padding: 5mm; border-radius: 20px; text-align: left !important;">
+      <div style="background: linear-gradient(135deg, #0284c7, #0369a1); margin: -5mm -5mm 12px -5mm; padding: 14px 18px; border-radius: 18px 18px 0 0; display: flex; justify-content: space-between; align-items: center;">
+        <span style="display: flex; align-items: center; gap: 8px; font-weight: 800; color: #fff; font-size: 15px; text-transform: uppercase;">
+          <span class="material-symbols-rounded">notifications</span> NOTIFIKASI SISTEM
+        </span>
+        <button type="button" onclick="tutupNotificationModal()" style="background: none; border: none; color: #ef4444 !important; font-size: 24px; font-weight: 900; cursor: pointer; line-height: 1;" title="TUTUP">&times;</button>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 0 4px; gap: 8px;">
+        <button type="button" style="background: none; border: none; color: var(--primary); font-size: 11.5px; font-weight: 700; cursor: pointer; text-decoration: underline;" onclick="markAllNotifAsRead()">
+          TANDAI SEMUA DIBACA
+        </button>
+        <button type="button" id="btnHapusSemuaNotifSystem" style="display: none; background: none; border: none; color: #ef4444; font-size: 11.5px; font-weight: 700; cursor: pointer; text-decoration: underline;" onclick="hapusSemuaNotifikasiSystem()">
+          HAPUS SEMUA NOTIFIKASI
+        </button>
+      </div>
+
+      <div id="notifListBody" style="max-height: 340px; overflow-y: auto; padding-right: 4px;">
+        <!-- Injected Dynamically -->
+      </div>
+
+      <div style="margin-top: 14px;">
+        <button type="button" class="btnOkNotif" style="height: 42px; width: 100%; border-radius: 12px; background: linear-gradient(135deg, #0284c7, #0369a1);" onclick="tutupNotificationModal()">TUTUP</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHAT WIDGET POPUP - SHORTER 380PX HEIGHT -->
+  <div id="popupBantuan" class="popupBantuan">
+    <div class="chatBox">
+      <div class="chatHeader">
+        <div class="chatInfo">
+          <div class="chatAvatar"><span class="material-symbols-rounded">support_agent</span></div>
+          <div>
+            <div id="chatHeaderTitle" class="chatNama">ADMIN SUPPORT</div>
+            <div class="chatStatus">ONLINE &bull; READY TO HELP</div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <button type="button" id="btnHapusSemuaChatHeader" class="btnHapusChatAllHeader" onclick="hapusSemuaChatAdmin()" title="HAPUS SEMUA CHAT SISTEM (KHUSUS ADMIN)" style="display: none; background: none; border: none; color: #ffffff; opacity: 0.85; cursor: pointer; align-items: center;">
+            <span class="material-symbols-rounded" style="font-size: 20px;">delete_forever</span>
+          </button>
+          <button type="button" class="chatClose" onclick="tutupBantuan()">&times;</button>
+        </div>
+      </div>
+
+      <!-- Admin Conversation Room List -->
+      <div id="chatList" style="display:none; flex:1; overflow-y:auto; padding:10px;"></div>
+
+      <!-- Chat Message Body -->
+      <div id="chatBody" class="chatBody"></div>
+
+      <!-- Chat Footer Input -->
+      <div id="chatFooter" class="chatFooter">
+        <button type="button" id="btnBackAdmin" style="display:none; width:36px; height:36px; border-radius:50%; background:#64748b; color:#fff; border:none; cursor:pointer;" onclick="kembaliKeDaftarAdmin()">
+          <span class="material-symbols-rounded">arrow_back</span>
+        </button>
+        <input type="text" id="chatPesan" placeholder="KETIK PESAN..." onkeydown="if((event.key==='Enter'||event.keyCode===13)&&!event.shiftKey){event.preventDefault();kirimPesanChat();}">
+        <button type="button" onclick="kirimPesanChat()">
+          <span class="material-symbols-rounded">send</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="app">
+
+    <!-- ==========================================================================
+     1. LOGIN PAGE (CARD TITLE & BUTTON = PERMINTAAN, PRESET REMOVED)
+     ========================================================================== -->
+    <section id="loginPage" class="page active">
+      <div class="login-card">
+        <div class="logo">
+          <span class="material-symbols-rounded">storefront</span>
+        </div>
+        <h2>PERMINTAAN TOKO</h2>
+        <p>SISTEM PERMINTAAN TOKO AREA JAWA BARAT</p>
+
+        <form id="loginForm" onsubmit="event.preventDefault(); if(typeof window.prosesLogin === 'function') window.prosesLogin();" novalidate>
+          <div class="input-group">
+            <span><span class="material-symbols-rounded">person</span></span>
+            <input type="text" id="username" placeholder="USERNAME" autocomplete="off">
+          </div>
+
+          <div class="input-group">
+            <span><span class="material-symbols-rounded">lock</span></span>
+            <input type="password" id="password" placeholder="PASSWORD">
+            <button type="button" id="togglePasswordBtn" onclick="togglePasswordVisibility()" title="LIHAT / SEMBUNYIKAN PASSWORD">
+              <span class="material-symbols-rounded" id="togglePasswordIcon" style="font-size: 20px;">visibility</span>
+            </button>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 15px; margin-top: -4px;">
+            <input type="checkbox" id="rememberMe" style="width: 16px; height: 16px; margin: 0; cursor: pointer;" checked>
+            <label for="rememberMe" style="margin: 0; font-size: 12px; color: var(--text-muted); cursor: pointer;">INGAT SANDI & SESI SAYA</label>
+          </div>
+
+          <button type="submit" class="btn-primary" id="btnLogin" onclick="if(typeof window.prosesLogin === 'function') window.prosesLogin();">MASUK APLIKASI</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- ==========================================================================
+         DASHBOARD PAGE (USER NAME & STAT CARDS FIXED AT TOP, ONLY TABLE SCROLLS)
+         ========================================================================== -->
+    <section id="dashboardPage" class="page">
+      <div class="dashboardTop">
+        <div class="header">
+          <div>
+            <h3 id="namaUser">ADMINISTRATOR PUSAT</h3>
+            <small id="areaUser">ADMIN - ALL AREA</small>
+          </div>
+        </div>
+
+        <!-- 4 Vibrant Glassmorphism Metric Cards (PENDING, APPROVE, REJECT, DONE) -->
+        <div class="stats">
+          <div class="cardStat pending" onclick="filterDashboardRecent('PENDING')" title="TAMPILKAN DATA PENDING DI DASHBOARD">
+            <div class="cardTop">
+              <div class="icon"><span class="material-symbols-rounded">hourglass_top</span></div>
+              <div class="cardText">
+                <div class="judul">PENDING</div>
+                <div id="pending" class="angka">0</div>
+              </div>
             </div>
-            <div class="navbar-menu">
-                <button class="nav-btn active" data-dashboard="umum">Dashboard UMUM</button>
-                <button class="nav-btn" data-dashboard="dm">Dashboard DM</button>
-                <button class="nav-btn" data-dashboard="service">Dashboard SERVICE</button>
-                <button class="nav-btn logout" id="logoutBtn">Logout</button>
+            <span class="material-symbols-rounded bgWatermark">hourglass_empty</span>
+            <div class="statProgressBg"><div id="barPending" class="statProgressFill" style="width: 30%;"></div></div>
+          </div>
+
+          <div class="cardStat approve" onclick="filterDashboardRecent('APPROVE')" title="TAMPILKAN DATA APPROVE DI DASHBOARD">
+            <div class="cardTop">
+              <div class="icon"><span class="material-symbols-rounded">verified</span></div>
+              <div class="cardText">
+                <div class="judul">APPROVE</div>
+                <div id="approve" class="angka">0</div>
+              </div>
             </div>
-        </nav>
+            <span class="material-symbols-rounded bgWatermark">trending_up</span>
+            <div class="statProgressBg"><div id="barApprove" class="statProgressFill" style="width: 50%;"></div></div>
+          </div>
 
-        <!-- Main Content Area -->
-        <main class="main-content">
-            <!-- Dashboard UMUM (Sales) -->
-            <div id="dashboard-umum" class="dashboard active">
-                <div class="dashboard-header">
-                    <h2>Dashboard UMUM - Input Permintaan</h2>
-                </div>
-                
-                <div class="dashboard-body">
-                    <!-- Status Summary -->
-                    <div class="status-summary">
-                        <div class="status-card">
-                            <span class="status-label">PENDING</span>
-                            <span class="status-count" id="count-pending">0</span>
-                        </div>
-                        <div class="status-card">
-                            <span class="status-label">APPROVE</span>
-                            <span class="status-count" id="count-approve">0</span>
-                        </div>
-                        <div class="status-card">
-                            <span class="status-label">REJECT</span>
-                            <span class="status-count" id="count-reject">0</span>
-                        </div>
-                        <div class="status-card">
-                            <span class="status-label">DONE</span>
-                            <span class="status-count" id="count-done">0</span>
-                        </div>
-                    </div>
-
-                    <!-- Input Form -->
-                    <div class="form-section">
-                        <h3>Form Input Permintaan</h3>
-                        <form id="requestForm" class="form-container">
-                            <!-- Row 1: Tanggal & Nama Toko -->
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="tanggal">Tanggal:</label>
-                                    <input type="date" id="tanggal" required>
-                                </div>
-                                <div class="form-group">
-                                    <label for="namaToko">Nama Toko:</label>
-                                    <select id="namaToko" required>
-                                        <option value="">-- Pilih Toko --</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <!-- Row 2: Sales & Area -->
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="sales">Nama Sales:</label>
-                                    <input type="text" id="sales" readonly>
-                                </div>
-                                <div class="form-group">
-                                    <label for="area">Area Service:</label>
-                                    <input type="text" id="area" readonly>
-                                </div>
-                            </div>
-
-                            <!-- Row 3: Type Unit & Seri Unit -->
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="typeUnit">Type Unit:</label>
-                                    <select id="typeUnit" required>
-                                        <option value="">-- Pilih Type --</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="seriUnit">Seri Unit:</label>
-                                    <input type="text" id="seriUnit" required>
-                                </div>
-                            </div>
-
-                            <!-- Detail Barang (Dynamic Table) -->
-                            <div class="form-group">
-                                <label>Detail Barang:</label>
-                                <div class="table-wrapper">
-                                    <table id="barangTable" class="barang-table">
-                                        <thead>
-                                            <tr>
-                                                <th>No</th>
-                                                <th>Barang</th>
-                                                <th>Qty</th>
-                                                <th>Alasan</th>
-                                                <th>Aksi</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="barangTableBody">
-                                            <tr class="barang-row">
-                                                <td class="row-number">1</td>
-                                                <td><input type="text" class="barang-input" placeholder="Nama barang"></td>
-                                                <td><input type="number" class="qty-input" placeholder="Qty" min="1" value="1"></td>
-                                                <td><input type="text" class="alasan-input" placeholder="Alasan"></td>
-                                                <td>
-                                                    <button type="button" class="btn-delete-row" style="display:none;">Hapus</button>
-                                                </td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                                <button type="button" id="addRowBtn" class="btn-secondary">+ Tambah Barang</button>
-                            </div>
-
-                            <!-- Image Upload -->
-                            <div class="form-group">
-                                <label for="imageUpload">Upload Gambar:</label>
-                                <div class="image-upload-wrapper">
-                                    <input type="file" id="imageUpload" accept="image/*">
-                                    <div id="imagePreview" class="image-preview"></div>
-                                </div>
-                            </div>
-
-                            <!-- Action Buttons -->
-                            <div class="form-actions">
-                                <button type="submit" class="btn-primary">Simpan</button>
-                                <button type="reset" class="btn-secondary">Reset</button>
-                            </div>
-                        </form>
-                    </div>
-
-                    <!-- Data Table -->
-                    <div class="data-section">
-                        <h3>Data Permintaan</h3>
-                        <div class="table-wrapper">
-                            <table id="dataTable" class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>No Surat</th>
-                                        <th>Tanggal</th>
-                                        <th>Toko</th>
-                                        <th>Type</th>
-                                        <th>Seri</th>
-                                        <th>Status</th>
-                                        <th>Aksi</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="dataTableBody">
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
+          <div class="cardStat reject" onclick="filterDashboardRecent('REJECT')" title="TAMPILKAN DATA REJECT DI DASHBOARD">
+            <div class="cardTop">
+              <div class="icon"><span class="material-symbols-rounded">cancel</span></div>
+              <div class="cardText">
+                <div class="judul">REJECT</div>
+                <div id="reject" class="angka">0</div>
+              </div>
             </div>
+            <span class="material-symbols-rounded bgWatermark">shield_with_house</span>
+            <div class="statProgressBg"><div id="barReject" class="statProgressFill" style="width: 10%;"></div></div>
+          </div>
 
-            <!-- Dashboard DM -->
-            <div id="dashboard-dm" class="dashboard">
-                <div class="dashboard-header">
-                    <h2>Dashboard DM - Review & Approval</h2>
-                </div>
-                
-                <div class="dashboard-body">
-                    <div class="status-summary">
-                        <div class="status-card">
-                            <span class="status-label">PENDING</span>
-                            <span class="status-count" id="count-pending-dm">0</span>
-                        </div>
-                        <div class="status-card">
-                            <span class="status-label">APPROVE</span>
-                            <span class="status-count" id="count-approve-dm">0</span>
-                        </div>
-                        <div class="status-card">
-                            <span class="status-label">REJECT</span>
-                            <span class="status-count" id="count-reject-dm">0</span>
-                        </div>
-                    </div>
-
-                    <div class="table-wrapper">
-                        <table id="dmDataTable" class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>No Surat</th>
-                                    <th>Tanggal</th>
-                                    <th>Toko</th>
-                                    <th>Status Service</th>
-                                    <th>Status DM</th>
-                                    <th>Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody id="dmDataTableBody">
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <!-- Modal untuk Approval -->
-                    <div id="approvalModal" class="modal" style="display:none;">
-                        <div class="modal-content">
-                            <span class="close">&times;</span>
-                            <h3>Approval Permintaan</h3>
-                            <div id="approvalContent"></div>
-                            <div class="modal-actions">
-                                <button id="approveBtn" class="btn-primary">Approve</button>
-                                <button id="rejectBtn" class="btn-danger">Reject</button>
-                                <button id="cancelBtn" class="btn-secondary">Batal</button>
-                            </div>
-                            <div id="rejectReasonField" style="display:none; margin-top:20px;">
-                                <label for="rejectReason">Alasan Penolakan:</label>
-                                <textarea id="rejectReason" rows="4" placeholder="Masukkan alasan penolakan"></textarea>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+          <div class="cardStat done" onclick="filterDashboardRecent('DONE')" title="TAMPILKAN DATA SUDAH DIPENUHI DI DASHBOARD">
+            <div class="cardTop">
+              <div class="icon"><span class="material-symbols-rounded">task_alt</span></div>
+              <div class="cardText">
+                <div class="judul">DONE</div>
+                <div id="done" class="angka">0</div>
+              </div>
             </div>
+            <span class="material-symbols-rounded bgWatermark">assignment_turned_in</span>
+            <div class="statProgressBg"><div id="barDone" class="statProgressFill" style="width: 20%;"></div></div>
+          </div>
+        </div>
+      </div>
 
-            <!-- Dashboard SERVICE -->
-            <div id="dashboard-service" class="dashboard">
-                <div class="dashboard-header">
-                    <h2>Dashboard SERVICE - Verifikasi & Proses</h2>
-                </div>
-                
-                <div class="dashboard-body">
-                    <div class="status-summary">
-                        <div class="status-card">
-                            <span class="status-label">PENDING</span>
-                            <span class="status-count" id="count-pending-service">0</span>
-                        </div>
-                        <div class="status-card">
-                            <span class="status-label">APPROVE</span>
-                            <span class="status-count" id="count-approve-service">0</span>
-                        </div>
-                        <div class="status-card">
-                            <span class="status-label">DONE</span>
-                            <span class="status-count" id="count-done-service">0</span>
-                        </div>
-                    </div>
+      <!-- TITLE DATA DASHBOARD DI LUAR KOTAK (DI ATAS TABEL) -->
+      <h3 id="dashboardRecentTitle" style="margin: 6px 0 8px 2px !important; font-size: 13.5px !important; font-weight: 700 !important; color: var(--text-main); text-align: left !important; display: flex; align-items: center; gap: 8px; letter-spacing: 0.5px;">
+        <span class="material-symbols-rounded" style="color: var(--primary); font-size: 18px;">format_list_bulleted</span>
+        PERMINTAAN PENDING
+      </h3>
 
-                    <div class="table-wrapper">
-                        <table id="serviceDataTable" class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>No Surat</th>
-                                    <th>Tanggal</th>
-                                    <th>Toko</th>
-                                    <th>Status</th>
-                                    <th>Status DM</th>
-                                    <th>Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody id="serviceDataTableBody">
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+      <!-- TABEL DASHBOARD TANPA CARD (LANGSUNG TERHUBUNG KE HALAMAN) -->
+      <div id="detailDashboard" style="background: transparent !important; border: none !important; box-shadow: none !important; padding: 0 !important; margin: 0 0 22px 0 !important;">
+        <div class="tableWrap">
+          <table class="dashboardTable">
+            <thead>
+              <tr>
+                <th style="width: 18%; text-align: left;">TANGGAL</th>
+                <th style="width: 32%; text-align: left;">NO SURAT</th>
+                <th style="width: 30%; text-align: left;">NAMA TOKO</th>
+                <th style="width: 20%; text-align: left !important;">STATUS</th>
+              </tr>
+            </thead>
+            <tbody id="lastData">
+              <!-- Dynamic rows injected here -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================================================
+         3. INPUT FORM PAGE (FULL SCREEN LAYOUT WITH MARGIN)
+         ========================================================================== -->
+    <section id="inputPage" class="page">
+      <div class="box">
+        <h3>FORM PERMINTAAN TOKO</h3>
+
+        <label>TANGGAL</label>
+        <input id="tanggal" readonly>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+          <label style="margin-bottom: 0;">NAMA TOKO</label>
+          
+          <!-- Bungkus dengan ID containerTambahToko -->
+          <div id="containerTambahToko">
+            <button type="button" style="background: none; border: none; color: var(--primary); font-weight: bold; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;" onclick="bukaModalTambahToko()">
+              <span class="material-symbols-rounded" style="font-size: 16px;">add_circle</span> TAMBAH TOKO
+            </button>
+          </div>
+        </div>
+        <select id="toko"></select>
+
+        <label>JENIS PERMINTAAN</label>
+        <select id="jenisPermintaan" onchange="gantiJenis()">
+          <option value="DEFAULT" selected>DEFAULT</option>
+          <option value="DUS">DUS</option>
+        </select>
+
+        <h3 style="margin-top: 25px; margin-bottom: 12px; text-align: left !important;">DETAIL PERMINTAAN</h3>
+        <div id="infoSerial" style="text-align: left !important;"></div>
+
+        <!-- Dynamic Container Rows (No Header) -->
+        <div id="detailContainer"></div>
+
+        <div class="toolbarBarang" style="margin-top: 15px; margin-bottom: 25px;">
+          <button type="button" class="btnTambahBarang" onclick="tambahRow()">
+            <span class="material-symbols-rounded">add</span> TAMBAH BARANG
+          </button>
+        </div>
+
+        <div id="sectionUploadFoto">
+          <label>FOTO BARANG PENDUKUNG (MAKSIMAL 5 FOTO)</label>
+          <div class="uploadBox">
+            <input type="file" id="foto" accept="image/png, image/jpeg, image/jpg, image/webp, image/heic, image/heif, image/*" multiple onchange="previewFoto(event)" style="display:none">
+            <div id="previewArea" onclick="pilihFoto()">
+              <span class="material-symbols-rounded uploadIcon">add_a_photo</span>
+              <div id="previewText">TAP / DRAG FOTO DI SINI (MAKSIMAL 5 FOTO)</div>
+              <div id="photoPreviewsGrid" class="photo-grid-preview"></div>
             </div>
-        </main>
+          </div>
+        </div>
+
+        <label style="margin-top: 15px;">CATATAN</label>
+        <textarea id="catatan" rows="3" placeholder="TULIS CATATAN DIBUTUHKAN..."></textarea>
+
+        <button id="btnSimpan" class="btn-primary" onclick="simpanData()">SIMPAN PERMINTAAN</button>
+      </div>
+    </section>
+
+    <!-- ==========================================================================
+         4. DETAIL DATA / RIWAYAT PAGE (FULL SCREEN LAYOUT WITH MARGIN)
+         ========================================================================== -->
+    <section id="riwayatPage" class="page">
+      <div class="riwayatContent">
+        <h3>DETAIL DATA PERMINTAAN</h3>
+
+        <div class="searchToolbar">
+          <input type="text" id="searchRiwayat" placeholder="CARI NO SURAT, TOKO, TYPE, SERIAL..." onkeyup="filterRiwayat()">
+
+          <select id="filterStatusDropdown" style="width: 170px;" onchange="filterRiwayatDropdown()">
+            <option value="ALL">SEMUA STATUS</option>
+            <option value="PENDING">PENDING</option>
+            <option value="APPROVE">APPROVE</option>
+            <option value="REJECT">REJECT</option>
+            <option value="DONE">DONE</option>
+          </select>
+
+          <button class="btnDownload" onclick="downloadExcel()">
+            <span class="material-symbols-rounded">download</span> DOWNLOAD EXCEL (.XLSX)
+          </button>
+        </div>
+
+        <div class="tableWrap">
+          <table class="historyTable">
+            <thead>
+              <!-- Dynamic Header: AKSI, TGL, NO SURAT, TOKO, STATUS, CATATAN -->
+            </thead>
+            <tbody id="riwayatData">
+              <!-- Dynamic Rows -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================================================
+         5. MASTER DATABASE VIEW PAGE (ADMIN ONLY)
+         ========================================================================== -->
+    <section id="masterDbPage" class="page">
+      <div class="box box-full">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+          <h3 style="color: var(--primary);">MASTER DATA PERMINTAAN LENGKAP (ADMIN DATA UTAMA)</h3>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+            <button type="button" id="btnHapusMultiMasterDb" class="btnDownload" style="display: none; background: #ef4444; height: 42px; padding: 0 18px; font-weight: 800;" onclick="hapusMultiMasterDb()">
+              <span class="material-symbols-rounded">delete_sweep</span> HAPUS (0) DATA
+            </button>
+            <button class="btnDownload" style="background: #0284c7;" onclick="downloadMasterExcel()">
+              <span class="material-symbols-rounded">download</span> DOWNLOAD MASTER EXCEL LENGKAP (.XLSX)
+            </button>
+          </div>
+        </div>
+
+        <div class="searchToolbar">
+          <input type="text" id="searchMasterDb" placeholder="CARI DATA PERMINTAAN (NO SURAT, TOKO, TYPE, SERI, BARANG)..." onkeyup="loadMasterDbTable()">
+        </div>
+
+        <div class="tableWrap">
+          <table class="historyTable">
+            <thead>
+              <tr>
+                <th style="width: 36px; text-align: center;">
+                  <input type="checkbox" id="selectAllMasterDb" onchange="toggleSelectAllMasterDb(this)" style="cursor: pointer; width: 16px; height: 16px;" title="PILIH SEMUA">
+                </th>
+                <th>NO SURAT</th>
+                <th>TANGGAL</th>
+                <th>PEMOHON / TOKO</th>
+                <th>AREA</th>
+                <th>JENIS</th>
+                <th>DETAIL ITEM & ALASAN</th>
+                <th>STATUS</th>
+                <th>CATATAN</th>
+                <th style="text-align: center;">HAPUS DATA</th>
+              </tr>
+            </thead>
+            <tbody id="masterDbTableBody">
+              <!-- Injected dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================================================
+         6. USER MANAGEMENT & SETTINGS PAGE (ADMIN TSM - WITH KODE TOKO FIELD)
+         ========================================================================== -->
+    <section id="userManagementPage" class="page">
+      <!-- GOOGLE APPS SCRIPT / GOOGLE SHEETS DATABASE INTEGRATION -->
+      <div class="box" style="border-left: 4px solid #059669; margin-bottom: 20px; background: linear-gradient(135deg, rgba(5, 150, 105, 0.08), rgba(16, 185, 129, 0.03)); box-shadow: 0 4px 14px rgba(5, 150, 105, 0.08);">
+        <h3 style="color: #059669; display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-weight: 900;">
+          <span class="material-symbols-rounded" style="font-size: 24px;">table_chart</span> PENGATURAN DATABASE GOOGLE SHEETS (GOOGLE APPS SCRIPT)
+        </h3>
+        <p style="font-size: 12.5px; color: var(--text-muted); margin-bottom: 12px;">
+          SELURUH DATA (PERMINTAAN, USER, TOKO, TTD, CHAT & PENGATURAN) DISIMPAN LANGSUNG KE GOOGLE SPREADSHEET GOOGLE DRIVE ANDA SECARA OTOMATIS & REAL-TIME.
+        </p>
+
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px;">
+          <input type="url" id="googleScriptUrlInput" placeholder="MASUKKAN URL GOOGLE APPS SCRIPT (akhiran /exec)" style="flex: 1; min-width: 280px; padding: 12px; font-family: monospace; font-size: 12px;">
+          <button type="button" class="btnDownload" style="background: #059669; height: 44px; font-weight: 800;" onclick="simpanGoogleScriptUrl()">
+            <span class="material-symbols-rounded">save</span> SIMPAN URL GOOGLE SHEETS
+          </button>
+        </div>
+
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+          <button type="button" class="btnDownload" style="background: #0284c7; height: 38px; padding: 0 14px; font-weight: 700;" onclick="tesKoneksiGoogleSheets()">
+            <span class="material-symbols-rounded">wifi_tethering</span> TEST KONEKSI GOOGLE SHEETS
+          </button>
+          <button type="button" class="btnDownload" style="background: #16a34a; height: 38px; padding: 0 14px; font-weight: 700;" onclick="sinkronkanSemuaKeGoogleSheets()">
+            <span class="material-symbols-rounded">cloud_upload</span> SINKRONKAN SEMUA KE SPREADSHEET
+          </button>
+          <button type="button" class="btnDownload" style="background: #7c3aed; height: 38px; padding: 0 14px; font-weight: 700;" onclick="tarikSemuaDariGoogleSheets()">
+            <span class="material-symbols-rounded">cloud_download</span> TARIK DARI SPREADSHEET
+          </button>
+          <button type="button" class="btnDownload" style="background: #ea580c; height: 38px; padding: 0 14px; font-weight: 700;" onclick="bukaPetunjukGoogleScript()">
+            <span class="material-symbols-rounded">code</span> PETUNJUK KODE APPS SCRIPT (Code.gs)
+          </button>
+        </div>
+      </div>
+
+      <!-- FONTE WHATSAPP AUTOMATION TOKEN CONFIGURATION -->
+      <div class="box" style="border-left: 4px solid #16a34a; margin-bottom: 20px;">
+        <h3 style="color: #16a34a; display: flex; align-items: center; gap: 8px;">
+          <span class="material-symbols-rounded">chat</span> PENGATURAN AUTOMATION WHATSAPP (FONTE / FONNTE API)
+        </h3>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+          NOTIFIKASI WHATSAPP AKAN OTOMATIS DIKIRIMKAN KE SERVICE, DM, DAN TOKO/SALES UNTUK SETIAP PERUBAHAN STATUS PERMINTAAN.
+        </p>
+
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+          <input type="text" id="fonteTokenInput" placeholder="MASUKKAN TOKEN FONTE" style="flex: 1; min-width: 280px; padding: 12px;">
+          <button type="button" class="btnDownload" style="background: #16a34a; height: 44px;" onclick="simpanFonteToken()">
+            <span class="material-symbols-rounded">save</span> SIMPAN TOKEN WA
+          </button>
+        </div>
+      </div>
+
+      <!-- ADMIN CONTROL SWITCH: FEATURE TOGGLE FOR UPLOAD FOTO INPUT -->
+      <div class="box" style="border-left: 4px solid #8b5cf6; margin-bottom: 20px; background: rgba(139, 92, 246, 0.05);">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <h3 style="color: #8b5cf6; display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+              <span class="material-symbols-rounded">camera_alt</span> ATUR KOLOM UNGGAH FOTO USER (ON / OFF)
+            </h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin: 0;">
+              KONTROL ADMIN UNTUK MENAMPILKAN ATAU MENYEMBUNYIKAN SEKSI UPLOAD FOTO DI HALAMAN FORM PERMINTAAN SEMUA USER.
+            </p>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span id="photoFeatureStatusText" style="font-weight: 700; font-size: 13px; color: #10b981;">AKTIF (ON)</span>
+            <button type="button" id="btnTogglePhotoFeature" class="btnDownload" style="background: #8b5cf6; height: 38px; padding: 0 16px;" onclick="toggleFeaturePhotoAdmin()">
+              TOGGLE ON / OFF
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ADMIN CONTROL: PENGATURAN TEMA GLOBAL UNTUK SEMUA PERANGKAT -->
+      <div class="box" style="border-left: 4px solid #0284c7; margin-bottom: 20px; background: rgba(2, 132, 199, 0.05);">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
+          <div>
+            <h3 style="color: #0284c7; display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+              <span class="material-symbols-rounded">palette</span> KONTROL TEMA GLOBAL ADMIN (ATUR TEMA SEMUA PERANGKAT)
+            </h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin: 0;">
+              ADMIN DAPAT MEMILIH TEMA UTAMA UNTUK DITERAPKAN KE SUPABASE SERTA SELURUH PERANGKAT USER.
+            </p>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+          <button type="button" class="btnDownload" style="background: #1e293b;" onclick="setGlobalAdminTheme('dark-mode')"><span class="material-symbols-rounded">light_mode</span> DARK</button>
+          <button type="button" class="btnDownload" style="background: #0284c7; color: #ffffff;" onclick="setGlobalAdminTheme('light-mode')"><span class="material-symbols-rounded">dark_mode</span> LIGHT</button>
+          <button type="button" class="btnDownload" style="background: #2563eb;" onclick="setGlobalAdminTheme('classic-mode')"><span class="material-symbols-rounded">menu_book</span> CLASSIC</button>
+          <button type="button" class="btnDownload" style="background: #06b6d4;" onclick="setGlobalAdminTheme('neon-mode')"><span class="material-symbols-rounded">bolt</span> NEON</button>
+          <button type="button" class="btnDownload" style="background: #059669;" onclick="setGlobalAdminTheme('forest-mode')"><span class="material-symbols-rounded">eco</span> FOREST</button>
+          <button type="button" class="btnDownload" style="background: #ea580c;" onclick="setGlobalAdminTheme('sunset-mode')"><span class="material-symbols-rounded">wb_sunny</span> SUNSET</button>
+          <button type="button" class="btnDownload" style="background: #0284c7;" onclick="setGlobalAdminTheme('ocean-mode')"><span class="material-symbols-rounded">water</span> OCEAN</button>
+          <button type="button" class="btnDownload" style="background: #78350f;" onclick="setGlobalAdminTheme('coffee-mode')"><span class="material-symbols-rounded">coffee</span> COFFEE</button>
+          <button type="button" class="btnDownload" style="background: #7c3aed;" onclick="setGlobalAdminTheme('purple-mode')"><span class="material-symbols-rounded">purple</span> PURPLE</button>
+          <button type="button" class="btnDownload" style="background: #dc2626;" onclick="setGlobalAdminTheme('crimson-mode')"><span class="material-symbols-rounded">local_fire_department</span> CRIMSON</button>
+        </div>
+      </div>
+
+      <!-- ADMIN CONTROL: HAPUS GAMBAR / FOTO SUPABASE -->
+      <div class="box" style="border-left: 4px solid #ef4444; margin-bottom: 20px; background: rgba(239, 68, 68, 0.05);">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <h3 style="color: #ef4444; display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+              <span class="material-symbols-rounded">delete</span> HAPUS GAMBAR / FOTO SUPABASE
+            </h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin: 0;">
+              MENGHAPUS SEMUA GAMBAR/FOTO DARI SUPABASE CLOUD DAN APLIKASI UNTUK MENGHEMAT KAPASITAS PENYIMPANAN.
+            </p>
+          </div>
+          <button type="button" class="btnDownload" style="background: #dc2626; color: #ffffff; padding: 10px 16px; font-weight: 700;" onclick="hapusSemuaFotoBiasa()">
+            <span class="material-symbols-rounded" style="vertical-align: middle; margin-right: 4px;">delete_forever</span> HAPUS SEMUA FOTO
+          </button>
+        </div>
+      </div>
+
+      <!-- ADMIN CONTROL: BERSIHKAN PENYIMPANAN LOKAL BROWSER -->
+      <div class="box" style="border-left: 4px solid #0284c7; margin-bottom: 20px; background: rgba(2, 132, 199, 0.05);">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <h3 style="color: #0284c7; display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+              <span class="material-symbols-rounded">cleaning_services</span> BERSIHKAN PENYIMPANAN LOKAL & TARIK SUPABASE
+            </h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin: 0;">
+              MENGHAPUS PENYIMPANAN LOKAL BROWSER LAMA DAN MEMATUHI SUPABASE CLOUD SEBAGAI SATU-SATUNYA SUMBER DATA UTAMA (TETAP MENJAGA TEMA & TTD).
+            </p>
+          </div>
+          <button type="button" class="btnDownload" style="background: #0284c7; color: #ffffff; padding: 10px 16px; font-weight: 700;" onclick="eksekusiHapusPenyimpananLokal()">
+            <span class="material-symbols-rounded" style="vertical-align: middle; margin-right: 4px;">cleaning_services</span> BERSIHKAN PENYIMPANAN
+          </button>
+        </div>
+      </div>
+
+      <!-- ADMIN CONTROL TOGGLES (REMINDER PENDING SERVICE & DM) -->
+      <div id="adminReminderControlContainer" class="box" style="border-left: 4px solid #7c3aed; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <div>
+          <h3 style="color: #7c3aed; display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+            <span class="material-symbols-rounded">notifications_active</span> REMINDER OTOMATIS PENDING SERVICE & DM
+          </h3>
+          <p style="font-size: 12px; color: var(--text-muted); margin: 0;">
+            FONTE WA HANYA DIKIRIM KE SERVICE & DM PADA JAM TERJADWAL YANG DIATUR DI BAWAH INI.
+          </p>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label style="font-size: 11px; font-weight: 700; color: var(--text-main); margin-bottom: 0;">JAM WA:</label>
+            <input type="time" id="adminReminderTimeInput" style="padding: 6px 10px; font-size: 12px; border-radius: 6px; border: 1px solid var(--border-color);" onchange="simpanAdminReminderTime()">
+          </div>
+          <span id="reminderFeatureStatusText" style="font-size: 13px; font-weight: 800; color: #10b981;">AKTIF (ON)</span>
+          <button type="button" class="btnDownload" style="background: #7c3aed; height: 38px; padding: 0 14px;" onclick="toggleAdminReminderFeature()">
+            <span class="material-symbols-rounded">toggle_on</span> ON / OFF
+          </button>
+          <button type="button" class="btnDownload" style="background: #0284c7; height: 38px; padding: 0 14px; font-weight: 800;" onclick="tesKirimAdminReminder()" title="TES KIRIM REMINDER WA SEKARANG">
+            <span class="material-symbols-rounded">send</span> TES REMINDER
+          </button>
+        </div>
+      </div>
+
+      <!-- ADMIN CONTROL: PENGATURAN UPLOAD FOTO (GLOBAL ON / OFF) -->
+      <div id="adminPhotoControlContainer" class="box" style="border-left: 4px solid #10b981; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <div>
+          <h3 style="color: #10b981; display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+            <span class="material-symbols-rounded">add_a_photo</span> PENGATURAN UPLOAD FOTO BUKTI (GLOBAL ON / OFF)
+          </h3>
+          <p style="font-size: 12px; color: var(--text-muted); margin: 0;">
+            JIKA STATUS OFF, FITUR UPLOAD FOTO DI SELEKSI FORM INPUT DAN LIHAT FOTO DINOAKTIFKAN UNTUK SEMUA AKUN / USER.
+          </p>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+          <span id="photoFeatureStatusText" style="font-size: 13px; font-weight: 800; color: #10b981;">AKTIF (ON)</span>
+          <button type="button" class="btnDownload" style="background: #10b981; height: 38px; padding: 0 16px;" onclick="toggleFeaturePhotoAdmin()">
+            <span class="material-symbols-rounded">toggle_on</span> ON / OFF
+          </button>
+        </div>
+      </div>
+
+      <!-- ADMIN CONTROL: HAPUS SEMUA CHAT DI FIREBASE & LOKAL -->
+      <div class="box" style="border-left: 4px solid #ef4444; margin-bottom: 20px; background: rgba(239, 68, 68, 0.05);">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <h3 style="color: #ef4444; display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+              <span class="material-symbols-rounded">forum</span> HAPUS SEMUA CHAT BANTUAN
+            </h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin: 0;">
+              BERSIHKAN SELURUH PESAN CHAT DAN ROOM CHAT BANTUAN SECARA PERMANEN.
+            </p>
+          </div>
+          <button type="button" class="btnDownload" style="background: #ef4444; height: 42px; padding: 0 20px; font-weight: 800;" onclick="hapusSemuaChatAdmin()">
+            <span class="material-symbols-rounded">delete_sweep</span> HAPUS SEMUA CHAT
+          </button>
+        </div>
+      </div>
+
+      <!-- ADMIN CONTROL: HAPUS SEMUA NOTIFIKASI DI FIREBASE & LOKAL -->
+      <div class="box" style="border-left: 4px solid #dc2626; margin-bottom: 20px; background: rgba(220, 38, 38, 0.05);">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <h3 style="color: #dc2626; display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+              <span class="material-symbols-rounded">notifications_off</span> HAPUS SEMUA NOTIFIKASI
+            </h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin: 0;">
+              BERSIHKAN SELURUH RIWAYAT NOTIFIKASI PERMINTAAN SECARA PERMANEN.
+            </p>
+          </div>
+          <button type="button" class="btnDownload" style="background: #dc2626; height: 42px; padding: 0 20px; font-weight: 800;" onclick="hapusSemuaNotifFirebaseDanLokal()">
+            <span class="material-symbols-rounded">delete_sweep</span> HAPUS SEMUA NOTIFIKASI
+          </button>
+        </div>
+      </div>
+
+      <!-- UPLOAD MASTER LOOKUP KODE UNIT (FILE EXCEL .XLSX: A=KODE, B=TYPE) -->
+      <div class="box" style="border-left: 4px solid #0284c7; margin-bottom: 20px;">
+        <h3 style="color: #0284c7; display: flex; align-items: center; gap: 8px;">
+          <span class="material-symbols-rounded">upload_file</span> UPLOAD MASTER LOOKUP KODE UNIT (FILE EXCEL .XLSX)
+        </h3>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+          UPLOAD FILE EXCEL (.XLSX) 2 KOLOM (KOLOM A = KODE / PREFIX NO SERI, KOLOM B = TYPE BARANG) TANPA BATASAN / BEBAS COPAS.
+        </p>
+
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+          <input type="file" id="excelLookupFile" accept=".xlsx, .xls" style="display:none" onchange="prosesUploadExcelLookup(event)">
+          <button type="button" class="btnDownload" style="background: #0284c7; height: 42px;" onclick="document.getElementById('excelLookupFile').click()">
+            <span class="material-symbols-rounded">file_upload</span> UPLOAD FILE EXCEL LOOKUP (.XLSX)
+          </button>
+          <span id="lookupUploadStatus" style="font-size: 12px; color: var(--primary); font-weight: 600;"></span>
+        </div>
+      </div>
+
+      <!-- BOX UPLOAD MASTER DAFTAR TOKO SEKALIGUS (FILE EXCEL 2 KOLOM: A=NAMA TOKO, B=AREA) -->
+      <div class="box" style="border-left: 4px solid #16a34a; margin-bottom: 24px; background: linear-gradient(135deg, rgba(22, 163, 74, 0.08), rgba(21, 128, 61, 0.03));">
+        <h3 style="color: #16a34a; display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+          <span class="material-symbols-rounded">file_upload</span> UPLOAD DAFTAR TOKO SEKALIGUS (EXCEL / CSV - 2 KOLOM)
+        </h3>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+          DATA EXCEL: <strong>KOLOM A = NAMA TOKO</strong> | <strong>KOLOM B = AREA</strong> (MISAL: BDG, CKR, TSMI, CSB). KODE TOKO UNIK OTOMATIS DIBUAT & DISIMPAN KE CLOUD.
+        </p>
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+          <input type="file" id="excelTokoFileAdminInput" accept=".xlsx, .xls, .csv" style="display:none" onchange="prosesUploadExcelToko(event)">
+          <button type="button" class="btnDownload" style="background: #16a34a; height: 42px;" onclick="document.getElementById('excelTokoFileAdminInput').click()">
+            <span class="material-symbols-rounded">upload_file</span> UPLOAD EXCEL DAFTAR TOKO (KOLOM A = NAMA, KOLOM B = AREA)
+          </button>
+        </div>
+      </div>
+
+      <!-- PENGATURAN MODEL TEMPLATE PDF SURAT PERMINTAAN (5 MODEL WITH LARGE POPUP MODAL) -->
+      <div class="box" style="border-left: 4px solid #7c3aed; margin-bottom: 28px; background: linear-gradient(135deg, rgba(124, 58, 237, 0.08), rgba(109, 40, 217, 0.03)); box-shadow: 0 4px 14px rgba(124, 58, 237, 0.08);">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <h3 style="color: #7c3aed; display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-weight: 900;">
+              <span class="material-symbols-rounded" style="font-size: 24px;">picture_as_pdf</span> PENGATURAN MODEL TEMPLATE SURAT PDF (5 MODEL DESAIN)
+            </h3>
+            <p style="font-size: 12.5px; color: var(--text-muted); margin: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+              STATUS MODEL TERPASANG: 
+              <span id="activePdfModelBadge" style="background: linear-gradient(135deg, #7c3aed, #6d28d9); color: #ffffff; padding: 4px 12px; border-radius: 20px; font-weight: 900; font-size: 11px; letter-spacing: 0.5px; box-shadow: 0 3px 8px rgba(124, 58, 237, 0.25);">
+                MODE 1 (STANDAR KLASIK)
+              </span>
+            </p>
+          </div>
+          <button type="button" class="btnTambahBarang" style="background: linear-gradient(135deg, #7c3aed, #6d28d9); height: 44px; padding: 0 22px; font-weight: 800; border-radius: 12px; box-shadow: 0 6px 16px rgba(124, 58, 237, 0.3);" onclick="bukaModalPdfModels()">
+            <span class="material-symbols-rounded">style</span> PILIH & PRATINJAU MODEL PDF (MODE 1 - 5)
+          </button>
+        </div>
+      </div>
+
+      <!-- USER MANAGEMENT TABLE -->
+      <div class="box">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+          <h3>PENGATURAN AKUN USER, KODE TOKO & HAK AKSES</h3>
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <button type="button" id="btnHapusMultiUser" class="btnDownload" style="display: none; background: #ef4444; height: 38px; padding: 0 16px; font-weight: 800;" onclick="hapusMultiUser()">
+              <span class="material-symbols-rounded">delete_sweep</span> HAPUS (0) USER
+            </button>
+            <button class="btnTambahBarang" onclick="bukaUserModal()">
+              <span class="material-symbols-rounded">person_add</span> TAMBAH USER BARU
+            </button>
+          </div>
+        </div>
+
+        <div class="tableWrap">
+          <table class="historyTable">
+            <thead>
+              <tr>
+                <th style="width: 36px; text-align: center;">
+                  <input type="checkbox" id="selectAllUsers" onchange="toggleSelectAllUsers(this)" style="cursor: pointer; width: 16px; height: 16px;" title="PILIH SEMUA">
+                </th>
+                <th>USERNAME</th>
+                <th>PASSWORD</th>
+                <th>NAMA LENGKAP</th>
+                <th>KODE TOKO</th>
+                <th>NO. HP</th>
+                <th>KATEGORI</th>
+                <th>AREA</th>
+                <th style="text-align: right;">AKSI MANAGEMENT</th>
+              </tr>
+            </thead>
+            <tbody id="userTableBody">
+              <tr>
+                <td style="font-weight:600;">ADMIN</td>
+                <td style="font-family:monospace; color:var(--text-muted);">1</td>
+                <td>ADMINISTRATOR PUSAT</td>
+                <td><strong style="color:var(--primary);">-</strong></td>
+                <td>-</td>
+                <td><span class="badgeStatus badge-pending" style="font-weight:600;">ADMIN</span></td>
+                <td><span style="color:var(--primary); font-weight:600;">ALL</span></td>
+                <td style="text-align: right; white-space:nowrap;">
+                  <button class="btnIcon btnEdit" onclick="bukaUserModal('USR-ADMIN')" title="EDIT USER"><span class="material-symbols-rounded">edit</span></button>
+                  <button class="btnIcon btnDelete" onclick="hapusUser('USR-ADMIN')" title="HAPUS USER"><span class="material-symbols-rounded">delete</span></button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================================================
+         BOTTOM MENU NAVIGATION BAR
+         ========================================================================== -->
+    <div id="bottomMenu" style="display:none;">
+      <button onclick="showPage('dashboardPage')">
+        <span class="material-symbols-rounded">home</span>
+        DASHBOARD
+      </button>
+
+      <button onclick="showPage('inputPage')">
+        <span class="material-symbols-rounded">edit_note</span>
+        INPUT
+      </button>
+
+      <button onclick="bukaMenuRiwayat()">
+        <span class="material-symbols-rounded">history</span>
+        DETAIL DATA
+      </button>
+
+      <button id="btnMasterDbNav" onclick="showPage('masterDbPage')" style="display: none;">
+        <span class="material-symbols-rounded">dataset</span>
+        MASTER DATA
+      </button>
+
+      <button id="btnUserNav" onclick="showPage('userManagementPage')" style="display: none;">
+        <span class="material-symbols-rounded">manage_accounts</span>
+        USER MGMT
+      </button>
+
+      <button onclick="bukaAkun()">
+        <span class="material-symbols-rounded">person</span>
+        AKUN
+      </button>
     </div>
 
-    <!-- Notification -->
-    <div id="notification" class="notification" style="display:none;"></div>
+  </div> <!-- End #app -->
 
-    <!-- Scripts -->
-    <script src="sheets/config.js"></script>
-    <script src="js/api.js"></script>
-    <script src="js/whatsapp.js"></script>
-    <script src="js/pdf.js"></script>
-    <script src="js/dashboard-umum.js"></script>
-    <script src="js/dashboard-dm.js"></script>
-    <script src="js/dashboard-service.js"></script>
-    <script src="js/app.js"></script>
+  <!-- ==========================================================================
+       MODALS & POPUPS
+       ========================================================================== -->
+
+  <!-- 1. POPUP AKUN & PROFILE MODAL -->
+  <div id="popupAkun" class="popupAkun">
+    <div class="akunBox" style="position: relative;">
+      <button type="button" class="popupClose" onclick="tutupAkun()" style="position: absolute; top: 12px; right: 12px;" title="TUTUP">&times;</button>
+      <h2>PROFIL AKUN</h2>
+      <div class="akunGrid">
+        <div style="min-width: 0;">
+          <label>NAMA LENGKAP</label>
+          <input type="text" id="akunNama">
+        </div>
+
+        <div style="min-width: 0;">
+          <label>NO. HP / WA</label>
+          <input type="text" id="akunHP" placeholder="Bisa 2 No: 0812... / 0898...">
+        </div>
+
+        <div style="min-width: 0;">
+          <label style="white-space: nowrap !important; word-break: keep-all !important; overflow: hidden !important; text-overflow: ellipsis !important;">AREA SERVICE</label>
+          <input type="text" id="akunArea" readonly style="white-space: nowrap !important; text-overflow: ellipsis !important; overflow: hidden !important; width: 100%;">
+        </div>
+
+        <div style="min-width: 0;">
+          <label style="white-space: nowrap !important; word-break: keep-all !important; overflow: hidden !important; text-overflow: ellipsis !important;">KATEGORI</label>
+          <input type="text" id="akunKategori" readonly style="white-space: nowrap !important; text-overflow: ellipsis !important; overflow: hidden !important; width: 100%;">
+        </div>
+
+        <div style="grid-column: span 2;">
+          <label>PASSWORD BARU (KOSONGKAN JIKA TIDAK DIUBAH)</label>
+          <input type="password" id="akunPassword" placeholder="MASUKKAN PASSWORD BARU">
+        </div>
+      </div>
+
+      <!-- Tambahkan ID menuKelolaTokoAkun di sini -->
+      <div id="menuKelolaTokoAkun" style="margin-top: 8px;">
+        <button type="button" class="btnTambahBarang" style="background: #0284c7; width: 100%; justify-content: center; height: 35px; border-radius: 8px; font-size: 11.5px; font-weight: 700;" onclick="tutupAkun(); bukaModalTambahToko();">
+          <span class="material-symbols-rounded" style="font-size: 18px;">store</span> KELOLA / TAMBAH TOKO BARU
+        </button>
+      </div>
+
+      <div id="menuTTD" style="margin-top: 8px; text-align: center; display: none;">
+        <button type="button" class="btnTambahBarang" style="background: #7c3aed; width: 100%; justify-content: center; height: 35px; border-radius: 8px; font-size: 11.5px; font-weight: 700;" onclick="tutupAkun(); bukaTTD();">
+          <span class="material-symbols-rounded" style="font-size: 18px;">draw</span> KELOLA TANDA TANGAN DIGITAL (TTD)
+        </button>
+      </div>
+
+      <!-- 2 EQUAL BUTTONS: REFRESH WEB & GANTI TEMA -->
+      <div style="margin-top: 8px; margin-bottom: 8px; display: flex; gap: 8px; width: 100%;">
+        <button type="button" class="refresh-icon-btn" onclick="window.location.reload()" title="REFRESH / MUAT ULANG APLIKASI WEB" style="flex: 1; height: 35px; padding: 6px; border-radius: 8px; border: 1px solid var(--border-color); background: #0284c7; color: #ffffff; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 11.5px; font-weight: 700; cursor: pointer; white-space: nowrap;">
+          <span class="material-symbols-rounded" style="font-size: 18px;">refresh</span> REFRESH WEB
+        </button>
+        <button type="button" class="theme-icon-btn" onclick="toggleTheme()" title="GANTI TEMA TAMPILAN" style="flex: 1; height: 35px; padding: 6px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--primary); color: #ffffff; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 11.5px; font-weight: 700; cursor: pointer; white-space: nowrap;">
+          <span class="material-symbols-rounded" style="font-size: 18px;">palette</span> GANTI TEMA
+        </button>
+      </div>
+
+      <div class="akunButton" style="display:flex; align-items:center; gap:8px;">
+        <button type="button" class="btnBatal" onclick="tutupAkun()" style="flex: 1; height: 35px; border-radius: 8px; font-size: 11.5px; font-weight: 700;">BATAL</button>
+        <button type="button" class="btnSimpan" onclick="simpanAkun()" style="flex: 1; height: 35px; border-radius: 8px; font-size: 11.5px; font-weight: 700;">SIMPAN</button>
+      </div>
+
+      <button type="button" class="btnLogout" onclick="logout()" style="width: 100%; height: 35px; margin-top: 8px; border-radius: 8px; font-size: 11.5px; font-weight: 700;">LOGOUT KELUAR</button>
+    </div>
+  </div>
+
+  <!-- POPUP TAMBAH TOKO MODAL (UNTUK SEMUA USER - OTOMATIS MASUK AREA USER & GENERATE 2 DIGIT KODE TOKO) -->
+  <div id="popupTambahToko" class="popupOverlay" onclick="if(event.target === this || event.target.id === 'popupTambahToko') { if(typeof window.tutupModalTambahToko==='function') window.tutupModalTambahToko(); else if(typeof tutupModalTambahToko==='function') tutupModalTambahToko(); }" style="display: none; align-items: flex-start !important; justify-content: center !important; padding-top: 12px !important;">
+    <div class="popupBox" style="width: 480px !important; max-width: 92vw !important; max-height: 86vh !important; overflow: hidden !important; margin: 0 auto !important; padding: 0 !important; border-radius: 18px !important; box-shadow: 0 20px 50px rgba(0,0,0,0.45) !important; display: flex !important; flex-direction: column !important;">
+      
+      <!-- HEADER (DIAM / FIXED) -->
+      <div class="popupHeader" style="background: linear-gradient(135deg, #0284c7, #0369a1); margin: 0; padding: 14px 18px; border-radius: 18px 18px 0 0; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;">
+        <span style="display: flex; align-items: center; gap: 6px; color: #ffffff; font-weight: 800; font-size: 14px;"><span class="material-symbols-rounded">store</span> KELOLA / TAMBAH TOKO BARU</span>
+        <button type="button" class="popupClose" onclick="if(typeof window.tutupModalTambahToko==='function') window.tutupModalTambahToko(); else if(typeof tutupModalTambahToko==='function') tutupModalTambahToko();" style="cursor: pointer; background: transparent; border: none; color: #ffffff; font-size: 28px; font-weight: 900; line-height: 1; margin: 0; padding: 0 4px; outline: none;" title="TUTUP">&times;</button>
+      </div>
+
+      <!-- POPUP BODY (CONTAINER TANPA SCROLL, FORM TERKUNCI DIAM) -->
+      <div class="popupBody" style="padding: 16px 18px 18px 18px; overflow: hidden; flex: 1; display: flex; flex-direction: column;">
+        
+        <!-- ELEMENT ATAS TERKUNCI (DIAM) -->
+        <div style="flex-shrink: 0;">
+          <p style="font-size: 11.5px; color: var(--text-muted); margin-bottom: 10px;">
+            PILIH AREA UNTUK TOKO BARU DENGAN KODE TOKO 2 DIGIT OTOMATIS:
+          </p>
+
+          <!-- PILIH AREA TOKO & INPUT NAMA TOKO BARU -->
+          <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+            <select id="selectAreaTokoBaru" style="min-width: 110px; padding: 10px; font-weight: 700; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-body); color: var(--primary); font-size: 12px;"></select>
+            <input type="text" id="inputNamaTokoBaru" placeholder="MASUKKAN NAMA TOKO BARU..." style="flex: 1; min-width: 180px; padding: 10px; text-transform: uppercase; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-body); color: var(--text-main);" onkeypress="if(event.key==='Enter') simpanTokoBaru()">
+            <button type="button" id="btnSimpanTokoBaru" class="btnDownload" style="background: #16a34a; white-space: nowrap; padding: 0 16px; border-radius: 8px;" onclick="simpanTokoBaru()">
+              <span class="material-symbols-rounded" style="vertical-align: middle;">save</span> SIMPAN
+            </button>
+          </div>
+
+          <!-- UPLOAD EXCEL SEKALIGUS (KOLOM A = NAMA TOKO, KOLOM B = AREA) -->
+          <div style="background: var(--bg-body); border: 1px dashed var(--primary); padding: 10px; border-radius: 10px; margin-bottom: 12px; text-align: center;">
+            <input type="file" id="excelTokoModalFileInput" accept=".xlsx, .xls, .csv" style="display: none;" onchange="prosesUploadExcelToko(event)">
+            <button type="button" class="btnDownload" style="background: linear-gradient(135deg, #0284c7, #0369a1); font-size: 11.5px; padding: 10px 14px; width: 100%; border-radius: 8px; cursor: pointer; justify-content: center;" onclick="document.getElementById('excelTokoModalFileInput').click()">
+              <span class="material-symbols-rounded" style="vertical-align: middle; font-size: 18px;">upload_file</span> UPLOAD FILE EXCEL DAFTAR TOKO (A = NAMA, B = AREA)
+            </button>
+          </div>
+
+          <!-- LABEL DAFTAR TOKO (DIAM) -->
+          <div style="font-size: 11px; font-weight: bold; margin-bottom: 6px; color: var(--primary);">DAFTAR TOKO TERDAFTAR DI AREA ANDA:</div>
+        </div>
+
+        <!-- HANYA BAGIAN TABEL DI BAWAH INI YANG MEMILIKI FITUR SCROLLING -->
+        <div style="flex: 1; max-height: 220px; min-height: 120px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-header); -webkit-overflow-scrolling: touch;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+            <thead style="position: sticky; top: 0; z-index: 10;">
+              <tr style="background: var(--bg-card); border-bottom: 1px solid var(--border-color);">
+                <th style="padding: 8px; text-align: left;">NAMA TOKO</th>
+                <th style="padding: 8px; text-align: center;">AREA</th>
+                <th style="padding: 8px; text-align: center;">KODE TOKO</th>
+                <th style="padding: 8px; text-align: center;">AKSI</th>
+              </tr>
+            </thead>
+            <tbody id="daftarTokoTableBody">
+              <!-- Dynamic Rows -->
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. POPUP CAMERA BARCODE / QR SCANNER -->
+  <div id="scannerModal" class="popupOverlay">
+    <div class="popupBox" style="width: 440px !important; max-width: 90vw !important; margin: auto !important; border-radius: 18px !important;">
+      <div class="popupHeader" style="background: var(--primary); border-radius: 18px 18px 0 0;">
+        <span><span class="material-symbols-rounded" style="vertical-align: middle;">qr_code_scanner</span> SCAN BARCODE / QR NO SERI</span>
+        <button type="button" onclick="tutupScanner()">&times;</button>
+      </div>
+      <div class="popupContent" style="text-align: center; padding: 18px;">
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">ARAHKAN KAMERA KE BARCODE / QR CODE NO SERI UNIT</p>
+        <div id="readerScanner" style="width: 100%; border-radius: 12px; overflow: hidden; background: #000; min-height: 240px; margin: 0 auto 14px auto;"></div>
+        <div style="display: flex; gap: 10px; justify-content: center;">
+          <button type="button" class="btnBatal" style="width: 100%; height: 40px; background: #ef4444; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 700;" onclick="tutupScanner()">BATAL / TUTUP</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. POPUP CONFIRMATION MODAL (YES/NO HALF SCREEN COMPACT CARD) -->
+  <div id="confirmOverlay" class="popupOverlay" style="z-index: 10000000;">
+    <div class="popupNotifCard" id="confirmBoxCard" style="width: 420px !important; max-width: 90vw !important; margin: auto !important; border-radius: 18px !important; overflow: hidden !important;">
+      <div class="popupNotifBody" style="padding: 22px 20px 16px 20px; text-align: center;">
+        <span class="material-symbols-rounded" style="font-size: 36px; color: var(--primary); margin-bottom: 8px; display: block;">help</span>
+        <p id="confirmMessage" style="font-size: 13.5px; font-weight: 700; line-height: 1.5; color: var(--text-main); margin: 0;">YAKIN INGIN MELANJUTKAN KAN?</p>
+      </div>
+      <div class="popupNotifFooter" style="padding: 0 16px 18px 16px; display: flex; gap: 10px;">
+        <button type="button" class="btnBatal" style="flex: 1; height: 38px; border-radius: 10px; border: none; font-weight: 700; cursor: pointer;" onclick="closeConfirm()">BATAL</button>
+        <button type="button" class="btnOkNotif" style="flex: 1; height: 38px; border-radius: 10px; border: none; background: var(--primary); color: #fff; font-weight: 700; cursor: pointer;" onclick="confirmYes()">YA, LANJUT</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. CLEAN & ATTRACTIVE NOTIFICATION DIALOG MODAL (OK HALF SCREEN COMPACT CARD) -->
+  <div id="popupNotif" class="popupOverlay" style="z-index: 10000000;">
+    <div class="popupNotifCard" id="popupNotifCard" style="width: 420px !important; max-width: 90vw !important; margin: auto !important; border-radius: 18px !important; overflow: hidden !important;">
+      <div class="popupNotifBody" style="padding: 22px 20px 16px 20px; text-align: center;">
+        <span id="popupNotifIcon" class="material-symbols-rounded" style="font-size: 36px; color: var(--primary); margin-bottom: 8px; display: block;">info</span>
+        <p id="popupNotifMessage" style="font-size: 13.5px; font-weight: 700; line-height: 1.5; color: var(--text-main); margin: 0;">MEMPROSES...</p>
+      </div>
+      <div class="popupNotifFooter" style="padding: 0 16px 18px 16px; display: flex; justify-content: center;">
+        <button type="button" class="btnOkNotif" id="btnOkNotif" style="width: 100%; height: 38px; border-radius: 10px; border: none; background: var(--primary); color: #fff; font-weight: 700; cursor: pointer;" onclick="closePopup()">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. POPUP REJECT REASON MODAL (HALF SCREEN COMPACT CARD) -->
+  <div id="rejectOverlay" class="popupOverlay">
+    <div class="rejectBoxPopup" style="width: 440px !important; max-width: 90vw !important; margin: auto !important; border-radius: 18px !important; overflow: hidden !important; background: var(--bg-box) !important; border: 1px solid var(--border-color) !important; box-shadow: 0 20px 50px rgba(0,0,0,0.45) !important;">
+      <div class="rejectHeaderPopup" style="background: linear-gradient(135deg, #ef4444, #dc2626); color: #ffffff; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;">
+        <span style="display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 800;"><span class="material-symbols-rounded">cancel</span> <span id="rejectTitle">TOLAK PERMINTAAN</span></span>
+        <button type="button" class="popupClose" onclick="closeReject()" style="background: none; border: none; color: #ffffff; font-size: 24px; font-weight: 800; cursor: pointer;">&times;</button>
+      </div>
+      <div class="rejectBodyPopup" style="padding: 18px;">
+        <input type="hidden" id="rejectNoSurat">
+        <input type="hidden" id="rejectRoleType">
+        <p style="font-size: 12px; font-weight: 700; color: var(--text-main); margin-bottom: 8px;">MASUKKAN ALASAN PENOLAKAN:</p>
+        <textarea id="rejectReason" rows="3" placeholder="Tuliskan alasan penolakan..." style="width: 100%; border-radius: 10px; padding: 10px; font-size: 12.5px; border: 1px solid var(--border-color); background: var(--bg-body); color: var(--text-main); margin-bottom: 16px; resize: vertical; box-sizing: border-box;"></textarea>
+        <div class="confirmButton" style="display: flex; gap: 10px;">
+          <button type="button" class="btnBatal" onclick="closeReject()" style="flex: 1; height: 38px; border-radius: 10px; font-weight: 700; cursor: pointer;">BATAL</button>
+          <button type="button" class="btnHapus" onclick="kirimReject()" style="flex: 1; height: 38px; border-radius: 10px; background: #ef4444; color: #fff; font-weight: 700; border: none; cursor: pointer;">KIRIM PENOLAKAN</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. POPUP UPLOAD BUKTI PROSES ARTEMIS MODAL (HALF SCREEN COMPACT CARD) -->
+  <div id="artemisOverlay" class="popupOverlay" style="z-index: 10000000; display: none;">
+    <div class="artemisBoxPopup" style="width: 460px !important; max-width: 92vw !important; margin: auto !important; border-radius: 18px !important; overflow: hidden !important; background: var(--bg-box) !important; border: 1px solid var(--border-color) !important; box-shadow: 0 20px 50px rgba(0,0,0,0.45) !important;">
+      <div class="artemisHeaderPopup" style="background: var(--primary); color: #ffffff; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;">
+        <span style="display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 800; color: #ffffff;"><span class="material-symbols-rounded" style="font-size: 22px;">photo_camera</span> <span id="artemisTitle">BUKTI PROSES ARTEMIS</span></span>
+        <button type="button" class="popupClose" onclick="closeArtemisModal()" style="background: none; border: none; color: #ffffff; font-size: 24px; font-weight: 800; cursor: pointer;">&times;</button>
+      </div>
+      <div class="artemisBodyPopup" style="padding: 18px;">
+        <input type="hidden" id="artemisNoSurat">
+        <p id="artemisSubTitle" style="font-size: 12px; font-weight: 700; color: var(--text-main); margin-bottom: 10px; line-height: 1.4;">UPLOAD FOTO BUKTI PROSES ARTEMIS UNTUK MENYELESAIKAN PERMINTAAN INI:</p>
+        
+        <input type="file" id="artemisFileInput" accept="image/jpeg, image/jpg, .jpg, .jpeg, image/*" multiple style="display: none;" onchange="handleArtemisPhotoSelect(event)">
+
+        <div id="artemisPasteBox" tabindex="0" onclick="document.getElementById('artemisFileInput').click();" title="PASTE DI SINI / KLIK UNTUK UPLOAD" style="margin: 6px 0 14px 0; padding: 14px 12px; border: 2px dashed var(--primary); border-radius: 14px; background: rgba(2, 132, 199, 0.04); text-align: center; cursor: pointer; transition: all 0.2s; outline: none;">
+          <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 6px;">
+            <span class="material-symbols-rounded" style="font-size: 26px; color: var(--primary);">content_paste_go</span>
+            <span class="material-symbols-rounded" style="font-size: 26px; color: var(--primary);">add_a_photo</span>
+          </div>
+          <div style="font-size: 13.5px; font-weight: 800; color: var(--primary); letter-spacing: 0.5px;">
+            PASTE DI SINI / KLIK UNTUK UPLOAD
+          </div>
+        </div>
+
+        <div id="artemisPhotoPreviewGrid" style="display: flex; flex-wrap: wrap; gap: 8px; max-height: 180px; overflow-y: auto; margin-bottom: 14px; padding: 6px; background: var(--bg-body); border-radius: 10px; border: 1px dashed var(--border-color);">
+          <!-- Photo previews injected dynamically -->
+        </div>
+
+        <div class="confirmButton" style="display: flex; gap: 10px;">
+          <button type="button" class="btnBatal" onclick="closeArtemisModal()" style="flex: 1; height: 38px; border-radius: 10px; font-weight: 700; cursor: pointer;">BATAL</button>
+          <button type="button" class="btnOkNotif" onclick="prosesSimpanDoneDenganBuktiArtemis()" style="flex: 1; height: 38px; border-radius: 10px; background: var(--primary); color: #fff; font-weight: 700; border: none; cursor: pointer;">SELESAIKAN (DONE)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="popupDetailBarangV2" class="popupOverlay" onclick="if(event.target === this) tutupDetailBarangV2();" style="display:none; padding: 10px 0 !important; width: 100vw !important;">
+    <div class="popupBoxDetailV2" style="width: calc(100vw - 2mm) !important; min-width: calc(100vw - 2mm) !important; max-width: calc(100vw - 2mm) !important; margin: auto 1mm !important; box-sizing: border-box !important;">
+      <div class="popupHeaderV2" style="background: var(--primary) !important; color: #ffffff !important; padding: 14px 18px !important; border-bottom: 1px solid rgba(255,255,255,0.2) !important; position: relative !important; display: flex !important; align-items: center !important; justify-content: center !important; border-radius: 18px 18px 0 0 !important;">
+        <span id="popupTitleV2" style="font-weight: 800 !important; text-align: center !important; font-size: 16px !important; letter-spacing: 0.5px !important; text-transform: uppercase !important; color: #ffffff !important; margin: 0 auto !important;">DETAIL PERMINTAAN</span>
+        <button type="button" class="popupCloseV2" onclick="tutupDetailBarangV2()" title="TUTUP" style="position: absolute !important; right: 14px !important; top: 50% !important; transform: translateY(-50%) !important; font-size: 28px !important; font-weight: 900 !important; color: #ffffff !important; background: transparent !important; border: none !important; cursor: pointer !important; line-height: 1 !important;">&times;</button>
+      </div>
+      <div id="popupBodyV2">
+        <!-- Injected Dynamically by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. POPUP DIGITAL SIGNATURE (TTD) MODAL -->
+  <div id="popupTTD" class="popupTTD popupOverlay">
+    <div class="ttdBox">
+      <h3 style="color: var(--primary); margin-bottom: 4px; font-size: 15px; font-weight: 800;">TANDA TANGAN DIGITAL (TTD)</h3>
+      <div class="ttdInfo" style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">GAMBAR TTD DI CANVAS ATAU AMBIL FOTO TTD KERTAS</div>
+
+      <div style="position: relative; width: 100%; box-sizing: border-box; overflow: hidden; padding: 2px;">
+        <canvas id="canvasTTD" style="width: 100% !important; max-width: 100% !important; height: 220px !important; border: 2px dashed var(--primary) !important; border-radius: 12px !important; background: #ffffff !important; display: block !important; box-sizing: border-box !important; margin: 0 auto 10px auto !important; touch-action: none;"></canvas>
+
+        <button type="button" onclick="pilihFotoTTD()" title="AMBIL / UPLOAD FOTO TTD DARI KAMERA/KERTAS" style="position: absolute; right: 10px; top: 10px; background: var(--primary); color: #ffffff; border: none; border-radius: 8px; padding: 6px 12px; font-size: 11px; font-weight: 800; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.25); z-index: 10; transition: transform 0.2s;">
+          <span class="material-symbols-rounded" style="font-size: 17px;">photo_camera</span> FOTO TTD
+        </button>
+
+        <input type="file" id="fotoTTDInput" accept="image/png, image/jpeg, image/jpg, image/webp, image/heic, image/heif, image/*" onchange="prosesFotoKeTTD(event)" style="display:none;">
+      </div>
+
+      <div class="ttdButton" style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+        <button type="button" class="btnBack" onclick="tutupTTD()" style="flex: 1; min-width: 80px; height: 38px; border-radius: 10px; font-weight: 700;">BATAL</button>
+        <button type="button" class="btnSecondary" onclick="hapusTTD()" style="flex: 1; min-width: 90px; height: 38px; border-radius: 10px; font-weight: 700;">BERSIHKAN</button>
+        <button type="button" class="btnPrimary" onclick="simpanTTD()" style="flex: 1.2; min-width: 110px; height: 38px; border-radius: 10px; font-weight: 700;">SIMPAN TTD</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 8. POPUP USER FORM MODAL (SQUARE, COMPACT & RECTANGULAR BOX WITH KODE TOKO) -->
+  <div id="popupUserForm" class="popupOverlay">
+    <div class="popupBox" style="width: 540px; max-width: 92vw; padding: 16px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); position: relative;">
+      <button type="button" class="popupClose" onclick="tutupUserModal()" style="position: absolute; top: 12px; right: 12px;" title="TUTUP">&times;</button>
+      <h3 id="userFormTitle" style="color: var(--primary); margin-bottom: 12px; text-align: center; font-size: 15px;">TAMBAH USER BARU</h3>
+      <input type="hidden" id="editUserId">
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; text-align: left;">
+        <div>
+          <label style="font-size: 11px; margin-bottom: 4px; display: block;">USERNAME</label>
+          <input type="text" id="uFormUsername" placeholder="" style="padding: 8px; font-size: 12px; margin-bottom: 8px;">
+
+          <label style="font-size: 11px; margin-bottom: 4px; display: block;">PASSWORD</label>
+          <input type="text" id="uFormPassword" placeholder="" style="padding: 8px; font-size: 12px; margin-bottom: 8px;">
+
+          <label style="font-size: 11px; margin-bottom: 4px; display: block;">NAMA LENGKAP</label>
+          <input type="text" id="uFormFullName" placeholder="" style="padding: 8px; font-size: 12px; margin-bottom: 8px;">
+        </div>
+
+        <div>
+          <label style="font-size: 11px; margin-bottom: 4px; display: block;">KODE TOKO (FORMAT SURAT)</label>
+          <input type="text" id="uFormStoreCode" placeholder="" style="padding: 8px; font-size: 12px; margin-bottom: 8px;">
+
+          <label style="font-size: 11px; margin-bottom: 4px; display: block;">NO. HP / WHATSAPP</label>
+          <input type="text" id="uFormPhone" placeholder="Bisa 2 No: 0812... / 0898..." style="padding: 8px; font-size: 12px; margin-bottom: 8px;">
+
+          <label style="font-size: 11px; margin-bottom: 4px; display: block;">KATEGORI (ROLE)</label>
+          <select id="uFormCategory" style="padding: 8px; font-size: 12px; margin-bottom: 8px; width: 100%;">
+            <option value="TOKO">TOKO</option>
+            <option value="SALES">SALES</option>
+            <option value="SERVICE">SERVICE</option>
+            <option value="DM">DM (DISTRICT MANAGER)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="text-align: left;">
+        <label style="font-size: 11px; margin-bottom: 4px; display: block; font-weight: 600;">AREA WILAYAH (BISA DILIPAT GANDA / CENTANG MULTI-AREA):</label>
+        <div id="uFormAreaCheckboxGroup" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; background: rgba(0,0,0,0.04); padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 12px;">
+          <label style="font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: pointer; color: var(--text-main); font-weight: 600;"><input type="checkbox" name="uFormAreaCheck" value="BDG"> BDG</label>
+          <label style="font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: pointer; color: var(--text-main); font-weight: 600;"><input type="checkbox" name="uFormAreaCheck" value="BDU"> BDU</label>
+          <label style="font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: pointer; color: var(--text-main); font-weight: 600;"><input type="checkbox" name="uFormAreaCheck" value="CRB"> CRB</label>
+          <label style="font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: pointer; color: var(--text-main); font-weight: 600;"><input type="checkbox" name="uFormAreaCheck" value="SKB"> SKB</label>
+          <label style="font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: pointer; color: var(--text-main); font-weight: 600;"><input type="checkbox" name="uFormAreaCheck" value="SBN"> SBN</label>
+          <label style="font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: pointer; color: var(--text-main); font-weight: 600;"><input type="checkbox" name="uFormAreaCheck" value="TSM"> TSM</label>
+        </div>
+        <input type="hidden" id="uFormArea">
+      </div>
+
+      <div class="confirmButton" style="margin-top: 8px; display: flex; gap: 10px;">
+        <button type="button" class="btnBatal" style="border-radius: 6px; height: 38px; flex: 1;" onclick="tutupUserModal()">BATAL</button>
+        <button type="button" class="btnHapus" style="background: var(--primary); border-radius: 6px; height: 38px; flex: 1;" onclick="simpanUserData()">SIMPAN USER</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 9. POPUP MODAL PILIHAN 5 MODEL TEMPLATE PDF (SIMPLE COMPACT 1-5 BUTTONS WITH FULL HEIGHT PREVIEW) -->
+  <div id="popupPdfModelsModal" class="popupOverlay" style="z-index: 1000000; align-items: flex-start; padding-top: 8px;">
+    <div class="popupBox" style="width: 840px; max-width: 96vw; height: 95vh; max-height: 95vh; display: flex; flex-direction: column; padding: 0; border-radius: 16px; overflow: hidden; position: relative; box-shadow: 0 20px 50px rgba(0,0,0,0.35);">
+      <div class="popupHeader" style="background: linear-gradient(135deg, #7c3aed, #4c1d95); padding: 12px 18px; position: relative; justify-content: center !important;">
+        <span style="font-size: 15px; font-weight: 900; color: #fff; text-align: center; letter-spacing: 0.5px;">
+          <span class="material-symbols-rounded" style="vertical-align: middle; margin-right: 6px; font-size: 20px;">picture_as_pdf</span> PILIH MODEL TEMPLATE SURAT PDF (1 - 5)
+        </span>
+        <button type="button" class="popupClose" onclick="tutupModalPdfModels()">&times;</button>
+      </div>
+
+      <!-- ACTIVE MODEL DESCRIPTION BANNER -->
+      <div id="pdfModelDescBanner" style="padding: 8px 16px; background: var(--bg-box); border-bottom: 1px solid var(--border-color);">
+        <!-- Injected Dynamically by JS -->
+      </div>
+
+      <!-- MAIN FULL DOCUMENT PREVIEW AREA (EXPANDED FULL HEIGHT) -->
+      <div class="popupContent" id="pdfModelFullPreviewArea" style="flex: 1; overflow-y: auto; padding: 12px 16px; background: #cbd5e1; display: flex; align-items: flex-start; justify-content: center;">
+        <!-- Injected Dynamically by JS -->
+      </div>
+
+      <!-- BOTTOM MODEL SELECTOR BAR (SIMPLE BUTTONS 1 TO 5 & SIMPAN BUTTON) -->
+      <div class="popupFooter" style="padding: 10px 16px; background: var(--bg-box); border-top: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 11px; font-weight: 900; color: var(--text-muted); text-transform: uppercase;">MODE:</span>
+          <div id="pdfModelSelectorNav" class="pdf-model-simple-nav">
+            <!-- Injected Dynamically by JS -->
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button type="button" class="btnBatal" style="padding: 8px 16px; border-radius: 10px; font-size: 12px; font-weight: 700;" onclick="tutupModalPdfModels()">BATAL</button>
+          <button type="button" class="btnTambahBarang" style="background: linear-gradient(135deg, #10b981, #059669); height: 40px; padding: 0 20px; font-size: 12px; font-weight: 900; border-radius: 10px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);" onclick="konfirmasiGunakanModelPdf()">
+            <span class="material-symbols-rounded" style="font-size: 18px;">check_circle</span> SIMPAN MODEL INI
+          </button>
+        </div>
+      </div>
+    </div>
+  <!-- POPUP PETUNJUK GOOGLE APPS SCRIPT (Code.gs) -->
+  <div id="popupGoogleScriptGuide" class="popupOverlay" style="z-index: 1000000; align-items: flex-start; padding-top: 12px;">
+    <div class="popupBox" style="width: 750px; max-width: 95vw; max-height: 90vh; display: flex; flex-direction: column; padding: 0; border-radius: 16px; overflow: hidden; background: var(--bg-box);">
+      <div class="popupHeader" style="background: linear-gradient(135deg, #059669, #047857); padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;">
+        <span style="font-size: 15px; font-weight: 900; color: #fff; display: flex; align-items: center; gap: 8px;">
+          <span class="material-symbols-rounded">table_chart</span> PANDUAN PEMASANGAN GOOGLE APPS SCRIPT (Code.gs)
+        </span>
+        <button type="button" class="popupClose" onclick="tutupPetunjukGoogleScript()">&times;</button>
+      </div>
+      <div class="popupContent" style="flex: 1; overflow-y: auto; padding: 18px; font-size: 13px; line-height: 1.6; color: var(--text-main);">
+        <h4 style="color: #059669; margin-bottom: 8px; font-weight: 800;">Langkah 1: Buat Google Spreadsheet</h4>
+        <p>Buka <a href="https://sheets.new" target="_blank" style="color: var(--primary); font-weight: 700;">sheets.new</a> di browser untuk membuat Google Spreadsheet baru.</p>
+
+        <h4 style="color: #059669; margin-top: 14px; margin-bottom: 8px; font-weight: 800;">Langkah 2: Buka Apps Script</h4>
+        <p>Di Google Spreadsheet tersebut, klik menu <strong>Ekstensi (Extensions)</strong> &gt; <strong>Apps Script</strong>.</p>
+
+        <h4 style="color: #059669; margin-top: 14px; margin-bottom: 8px; font-weight: 800;">Langkah 3: Salin Kode Backend (Code.gs)</h4>
+        <p>Hapus semua isi file default, lalu salin dan tempel kode berikut:</p>
+        <div style="position: relative; margin-bottom: 12px;">
+          <button type="button" class="btnDownload" style="position: absolute; right: 8px; top: 8px; background: #059669; height: 32px; padding: 0 12px; font-size: 11px; z-index: 5;" onclick="salinKodeGoogleScript()">
+            <span class="material-symbols-rounded" style="font-size: 14px;">content_copy</span> SALIN KODE
+          </button>
+          <textarea id="googleScriptCodePreview" readonly style="width: 100%; height: 180px; font-family: monospace; font-size: 11px; padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.06); color: var(--text-main);"></textarea>
+        </div>
+
+        <h4 style="color: #059669; margin-top: 14px; margin-bottom: 8px; font-weight: 800;">Langkah 4: Terapkan Sebagai Aplikasi Web (Deploy as Web App)</h4>
+        <ol style="padding-left: 20px; margin: 0;">
+          <li>Klik tombol biru <strong>Terapkan (Deploy)</strong> &gt; <strong>Penerapan baru (New deployment)</strong>.</li>
+          <li>Pilih jenis: <strong>Aplikasi Web (Web App)</strong>.</li>
+          <li>Jalankan sebagai: <strong>Saya (Email Anda)</strong>.</li>
+          <li>Siapa yang memiliki akses: <strong style="color: #ef4444;">Siapa saja (Anyone)</strong>.</li>
+          <li>Klik <strong>Terapkan</strong> &gt; Berikan izin akses (Authorize access).</li>
+          <li>Salin <strong>URL Aplikasi Web (akhiran /exec)</strong> lalu tempelkan ke kolom URL di Aplikasi Toko ini.</li>
+        </ol>
+      </div>
+      <div class="popupFooter" style="padding: 12px 18px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
+        <button type="button" class="btnBatal" style="padding: 8px 20px; border-radius: 8px;" onclick="tutupPetunjukGoogleScript()">TUTUP</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 10. POPUP PDF DOCUMENT PREVIEW MODAL -->
+  <div id="pdfModal" class="popupOverlay" onclick="if(event.target === this) tutupPdfModal();" style="align-items: flex-start !important; padding-top: 4px !important; padding-bottom: 4px !important; touch-action: pan-y !important; -webkit-overflow-scrolling: touch !important;">
+    <div class="popupBox" style="position: relative; height: calc(100vh - 8px) !important; max-height: calc(100vh - 8px) !important; display: flex !important; flex-direction: column !important; margin-top: 0 !important; touch-action: pan-y !important; -webkit-overflow-scrolling: touch !important;">
+      <div class="popupHeader" style="position: relative; display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; min-height: 48px; flex-shrink: 0 !important;">
+        <button type="button" class="btnPrintHeader" onclick="cetakDokumenPdf()" title="CETAK PDF / PRINT" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; background: #ffffff; color: #0284c7; border: none; border-radius: 6px; font-weight: 800; font-size: 12.5px; cursor: pointer; transform: none !important; animation: none !important; transition: none !important;">
+          <span class="material-symbols-rounded" style="font-size: 18px; transform: none !important; animation: none !important;">print</span> PRINT
+        </button>
+        <button type="button" class="popupClose" onclick="tutupPdfModal()" style="position: absolute !important; right: 14px !important; top: 10px !important; transform: none !important; transition: none !important; animation: none !important; font-size: 26px !important; font-weight: 900 !important; color: #ffffff !important; background: var(--primary) !important; border: 2px solid rgba(255, 255, 255, 0.4) !important; border-radius: 50% !important; width: 34px !important; height: 34px !important; display: flex !important; align-items: center !important; justify-content: center !important; cursor: pointer !important; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35) !important; z-index: 999999 !important;" title="TUTUP PDF">&times;</button>
+      </div>
+      <div class="popupContent" id="pdfDocumentContent" style="flex: 1; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; touch-action: pan-y !important; background: #f8fafc; padding: 14px;">
+        <!-- Injected dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- LIGHTBOX IMAGE VIEWER DENGAN KONTROL ZOOM DI BOTTOM BAR -->
+  <div id="imageViewer" class="image-viewer-modal" style="display: none;">
+    <span class="closeViewer" onclick="tutupImageViewer()">&times;</span>
+    
+    <!-- Tombol Kiri (<) -->
+    <button id="navViewerLeft" onclick="gantiFotoViewer(-1)" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); background: rgba(15,23,42,0.85); color: #ffffff; border: 2px solid rgba(255,255,255,0.4); border-radius: 50%; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 100000003; transition: transform 0.2s ease, background 0.2s ease; box-shadow: 0 4px 14px rgba(0,0,0,0.6);" title="FOTO SEBELUMNYA">
+      <span class="material-symbols-rounded" style="font-size: 32px; font-weight: bold;">chevron_left</span>
+    </button>
+
+    <div class="imageViewerCanvas" id="imageViewerCanvas" style="width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none;">
+      <img id="viewerImage" src="" alt="Bukti Foto" style="max-width: 90vw; max-height: 82vh; border-radius: 10px; object-fit: contain; transform-origin: center center; will-change: transform; transition: none; user-select: none; pointer-events: auto;">
+    </div>
+
+    <!-- Tombol Kanan (>) -->
+    <button id="navViewerRight" onclick="gantiFotoViewer(1)" style="position: absolute; right: 16px; top: 50%; transform: translateY(-50%); background: rgba(15,23,42,0.85); color: #ffffff; border: 2px solid rgba(255,255,255,0.4); border-radius: 50%; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 100000003; transition: transform 0.2s ease, background 0.2s ease; box-shadow: 0 4px 14px rgba(0,0,0,0.6);" title="FOTO SELANJUTNYA">
+      <span class="material-symbols-rounded" style="font-size: 32px; font-weight: bold;">chevron_right</span>
+    </button>
+
+    <!-- CONTROL BAR AT BOTTOM: COUNTER & ZOOM CONTROLS -->
+    <div class="viewerBottomBar">
+      <div id="viewerCounter">1 / 1</div>
+      <div class="zoomControls">
+        <button onclick="zoomImage(0.3)" title="Perbesar (+)">
+          <span class="material-symbols-rounded">zoom_in</span>
+        </button>
+        <button onclick="toggleRotation()" title="Ubah Landscape / Portrait (Rotasi 90°)">
+          <span class="material-symbols-rounded">crop_rotate</span>
+        </button>
+        <button onclick="zoomImage(-0.3)" title="Perkecil (-)">
+          <span class="material-symbols-rounded">zoom_out</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 11. GLOBAL LOADING OVERLAY (TEXTLESS, CENTERED ON ALL DEVICES) -->
+  <div id="loadingOverlay">
+    <div class="spinner"></div>
+  </div>
 </body>
 </html>
