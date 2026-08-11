@@ -103,7 +103,10 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  const lock = LockService.getScriptLock();
   try {
+    lock.waitLock(25000); // Kunci agar tidak terjadi tabrakan eksekusi ganda bersamaan
+
     let requestBody = {};
     if (e && e.postData && e.postData.contents) {
       try {
@@ -124,7 +127,7 @@ function doPost(e) {
       if (Array.isArray(requestBody.stores)) saveBulkStores(requestBody.stores);
       if (requestBody.ttd) saveBulkTTD(requestBody.ttd);
       if (requestBody.settings) saveBulkSettings(requestBody.settings);
-      return createJsonResponse({ status: 'success', message: 'Semua data berhasil disinkronkan ke Google Spreadsheet!' });
+      return createJsonResponse({ status: 'success', message: 'Semua data berhasil disinkronkan ke Google Spreadsheet tanpa duplikat!' });
     }
 
     // 2. SIMPAN / UPDATE REQUEST PERMINTAAN
@@ -224,6 +227,8 @@ function doPost(e) {
     return createJsonResponse({ status: 'error', message: 'Action doPost tidak dikenal: ' + action });
   } catch (err) {
     return createJsonResponse({ status: 'error', message: err.toString() });
+  } finally {
+    try { lock.releaseLock(); } catch(e) {}
   }
 }
 
@@ -299,63 +304,109 @@ function saveSingleRequest(req) {
   ];
 
   let foundRow = -1;
+  const duplicateRows = [];
+  let lastFilledRow = 1;
+
   for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]).trim().toUpperCase() === targetNoSurat) {
-      foundRow = i + 1;
-      break;
+    const colVal = String(data[i][0] || '').trim().toUpperCase();
+    if (colVal) {
+      lastFilledRow = i + 1;
+      if (colVal === targetNoSurat) {
+        if (foundRow === -1) {
+          foundRow = i + 1;
+        } else {
+          duplicateRows.push(i + 1);
+        }
+      }
     }
   }
 
   if (foundRow !== -1) {
+    // Mode edit / update status: perbarui baris spesifik yang cocok
     sheet.getRange(foundRow, 1, 1, rowValues.length).setValues([rowValues]);
+    // Bersihkan baris duplikat lama jika ada
+    for (let d = duplicateRows.length - 1; d >= 0; d--) {
+      sheet.deleteRow(duplicateRows[d]);
+    }
   } else {
-    sheet.appendRow(rowValues);
+    // DATA BARU: DITULIS KE BARIS KOSONG BERIKUTNYA KE BAWAH (MENERUSKAN KE BAWAH)
+    const targetRow = lastFilledRow + 1;
+    sheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
   }
   SpreadsheetApp.flush();
 }
 
 function saveBulkRequests(reqList) {
-  if (!Array.isArray(reqList)) return;
+  if (!Array.isArray(reqList) || reqList.length === 0) return;
   const sheet = getOrCreateSheet(SHEET_NAMES.REQUESTS);
-  
-  // Reset Sheet Data tapi pertahankan Header
-  sheet.clearContents();
-  initSheetHeader(sheet, SHEET_NAMES.REQUESTS);
+  const existingData = sheet.getDataRange().getValues();
 
-  if (reqList.length === 0) {
-    SpreadsheetApp.flush();
-    return;
+  const existingMap = new Map();
+  const duplicateRows = [];
+
+  for (let i = 1; i < existingData.length; i++) {
+    const ns = String(existingData[i][0] || '').trim().toUpperCase();
+    if (ns) {
+      if (!existingMap.has(ns)) {
+        existingMap.set(ns, i + 1);
+      } else {
+        duplicateRows.push(i + 1);
+      }
+    }
   }
 
-  // Deduplikasi by noSurat
-  const map = new Map();
+  for (let d = duplicateRows.length - 1; d >= 0; d--) {
+    sheet.deleteRow(duplicateRows[d]);
+  }
+
+  const refreshedData = sheet.getDataRange().getValues();
+  const refreshedMap = new Map();
+  let currentLastRow = 1;
+
+  for (let i = 1; i < refreshedData.length; i++) {
+    const ns = String(refreshedData[i][0] || '').trim().toUpperCase();
+    if (ns) {
+      currentLastRow = i + 1;
+      refreshedMap.set(ns, i + 1);
+    }
+  }
+
+  const processedKeys = new Set();
+
   reqList.forEach(req => {
-    if (req && req.noSurat) {
-      map.set(String(req.noSurat).trim().toUpperCase(), req);
+    if (!req || !req.noSurat) return;
+    const targetNoSurat = String(req.noSurat).trim().toUpperCase();
+    if (processedKeys.has(targetNoSurat)) return;
+    processedKeys.add(targetNoSurat);
+
+    const rowValues = [
+      req.noSurat,
+      req.tanggal || '',
+      req.toko || '',
+      req.area || '',
+      req.jenis || '',
+      req.status || 'PENDING',
+      req.serviceApprove ? 'TRUE' : 'FALSE',
+      req.createdBy || '',
+      req.userId || '',
+      JSON.stringify(req.items || []),
+      JSON.stringify(req.photos || []),
+      req.catatan || '',
+      JSON.stringify(req.log || []),
+      req.createdAt || new Date().toISOString()
+    ];
+
+    if (refreshedMap.has(targetNoSurat)) {
+      const rowIdx = refreshedMap.get(targetNoSurat);
+      sheet.getRange(rowIdx, 1, 1, rowValues.length).setValues([rowValues]);
+    } else {
+      // DATA BARU: DITULIS KE BARIS BERIKUTNYA KE BAWAH
+      currentLastRow++;
+      sheet.getRange(currentLastRow, 1, 1, rowValues.length).setValues([rowValues]);
+      refreshedMap.set(targetNoSurat, currentLastRow);
     }
   });
 
-  const uniqueList = Array.from(map.values());
-  const rows = uniqueList.map(req => [
-    req.noSurat,
-    req.tanggal || '',
-    req.toko || '',
-    req.area || '',
-    req.jenis || '',
-    req.status || 'PENDING',
-    req.serviceApprove ? 'TRUE' : 'FALSE',
-    req.createdBy || '',
-    req.userId || '',
-    JSON.stringify(req.items || []),
-    JSON.stringify(req.photos || []),
-    req.catatan || '',
-    JSON.stringify(req.log || []),
-    req.createdAt || new Date().toISOString()
-  ]);
-
-  if (rows.length > 0) {
-    sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
-  }
   SpreadsheetApp.flush();
 }
 
@@ -366,7 +417,7 @@ function deleteSingleRequest(noSurat) {
   const target = String(noSurat).trim().toUpperCase();
 
   for (let i = data.length - 1; i >= 1; i--) {
-    if (String(data[i][0]).trim().toUpperCase() === target) {
+    if (String(data[i][0] || '').trim().toUpperCase() === target) {
       sheet.deleteRow(i + 1);
     }
   }
@@ -380,7 +431,7 @@ function deleteBulkRequests(noSuratList) {
   const targets = new Set(noSuratList.map(n => String(n).trim().toUpperCase()));
 
   for (let i = data.length - 1; i >= 1; i--) {
-    if (targets.has(String(data[i][0]).trim().toUpperCase())) {
+    if (targets.has(String(data[i][0] || '').trim().toUpperCase())) {
       sheet.deleteRow(i + 1);
     }
   }
@@ -436,58 +487,103 @@ function saveSingleUser(user) {
   ];
 
   let foundRow = -1;
+  const duplicateRows = [];
+  let lastFilledRow = 1;
+
   for (let i = 1; i < data.length; i++) {
-    const rowId = String(data[i][0]).trim().toUpperCase();
-    const rowUser = String(data[i][1]).trim().toUpperCase();
-    if (rowUser === targetUsername || (targetId && rowId === targetId)) {
-      foundRow = i + 1;
-      break;
+    const rowId = String(data[i][0] || '').trim().toUpperCase();
+    const rowUser = String(data[i][1] || '').trim().toUpperCase();
+    if (rowUser || rowId) {
+      lastFilledRow = i + 1;
+      if (rowUser === targetUsername || (targetId && rowId === targetId)) {
+        if (foundRow === -1) {
+          foundRow = i + 1;
+        } else {
+          duplicateRows.push(i + 1);
+        }
+      }
     }
   }
 
   if (foundRow !== -1) {
     sheet.getRange(foundRow, 1, 1, rowValues.length).setValues([rowValues]);
+    for (let d = duplicateRows.length - 1; d >= 0; d--) {
+      sheet.deleteRow(duplicateRows[d]);
+    }
   } else {
-    sheet.appendRow(rowValues);
+    // DATA BARU: DITULIS KE BARIS KOSONG BERIKUTNYA KE BAWAH
+    const targetRow = lastFilledRow + 1;
+    sheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
   }
   SpreadsheetApp.flush();
 }
 
 function saveBulkUsers(userList) {
-  if (!Array.isArray(userList)) return;
+  if (!Array.isArray(userList) || userList.length === 0) return;
   const sheet = getOrCreateSheet(SHEET_NAMES.USERS);
-  sheet.clearContents();
-  initSheetHeader(sheet, SHEET_NAMES.USERS);
+  const existingData = sheet.getDataRange().getValues();
 
-  if (userList.length === 0) {
-    SpreadsheetApp.flush();
-    return;
+  const existingMap = new Map();
+  const duplicateRows = [];
+
+  for (let i = 1; i < existingData.length; i++) {
+    const uName = String(existingData[i][1] || '').trim().toUpperCase();
+    if (uName) {
+      if (!existingMap.has(uName)) {
+        existingMap.set(uName, i + 1);
+      } else {
+        duplicateRows.push(i + 1);
+      }
+    }
   }
 
-  // Deduplikasi by username
-  const map = new Map();
+  for (let d = duplicateRows.length - 1; d >= 0; d--) {
+    sheet.deleteRow(duplicateRows[d]);
+  }
+
+  const refreshedData = sheet.getDataRange().getValues();
+  const refreshedMap = new Map();
+  let currentLastRow = 1;
+
+  for (let i = 1; i < refreshedData.length; i++) {
+    const uName = String(refreshedData[i][1] || '').trim().toUpperCase();
+    if (uName) {
+      currentLastRow = i + 1;
+      refreshedMap.set(uName, i + 1);
+    }
+  }
+
+  const processedKeys = new Set();
+
   userList.forEach(u => {
-    if (u && u.username) {
-      map.set(String(u.username).trim().toUpperCase(), u);
+    if (!u || !u.username) return;
+    const targetUser = String(u.username).trim().toUpperCase();
+    if (processedKeys.has(targetUser)) return;
+    processedKeys.add(targetUser);
+
+    const rowValues = [
+      u.id || `USR-${Date.now()}`,
+      u.username,
+      u.password || '123',
+      u.fullName || u.username,
+      u.storeCode || '',
+      u.phone || '',
+      u.category || 'TOKO',
+      u.area || 'BDG',
+      u.createdAt || new Date().toISOString()
+    ];
+
+    if (refreshedMap.has(targetUser)) {
+      const rowIdx = refreshedMap.get(targetUser);
+      sheet.getRange(rowIdx, 1, 1, rowValues.length).setValues([rowValues]);
+    } else {
+      // DATA BARU: DITULIS KE BARIS BERIKUTNYA KE BAWAH
+      currentLastRow++;
+      sheet.getRange(currentLastRow, 1, 1, rowValues.length).setValues([rowValues]);
+      refreshedMap.set(targetUser, currentLastRow);
     }
   });
 
-  const uniqueUsers = Array.from(map.values());
-  const rows = uniqueUsers.map(u => [
-    u.id || `USR-${Date.now()}`,
-    u.username,
-    u.password || '123',
-    u.fullName || u.username,
-    u.storeCode || '',
-    u.phone || '',
-    u.category || 'TOKO',
-    u.area || 'BDG',
-    u.createdAt || new Date().toISOString()
-  ]);
-
-  if (rows.length > 0) {
-    sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
-  }
   SpreadsheetApp.flush();
 }
 
@@ -498,8 +594,8 @@ function deleteSingleUser(userId, username) {
   const targetUser = username ? String(username).trim().toUpperCase() : '';
 
   for (let i = data.length - 1; i >= 1; i--) {
-    const rowId = String(data[i][0]).trim().toUpperCase();
-    const rowUser = String(data[i][1]).trim().toUpperCase();
+    const rowId = String(data[i][0] || '').trim().toUpperCase();
+    const rowUser = String(data[i][1] || '').trim().toUpperCase();
     if ((targetId && rowId === targetId) || (targetUser && rowUser === targetUser)) {
       sheet.deleteRow(i + 1);
     }
@@ -514,8 +610,8 @@ function deleteBulkUsers(userIds, usernames) {
   const targetUserSet = new Set((usernames || []).map(u => String(u).trim().toUpperCase()));
 
   for (let i = data.length - 1; i >= 1; i--) {
-    const rowId = String(data[i][0]).trim().toUpperCase();
-    const rowUser = String(data[i][1]).trim().toUpperCase();
+    const rowId = String(data[i][0] || '').trim().toUpperCase();
+    const rowUser = String(data[i][1] || '').trim().toUpperCase();
     if (targetIdSet.has(rowId) || targetUserSet.has(rowUser)) {
       sheet.deleteRow(i + 1);
     }
@@ -566,55 +662,102 @@ function saveSingleStore(store) {
   ];
 
   let foundRow = -1;
+  const duplicateRows = [];
+  let lastFilledRow = 1;
+
   for (let i = 1; i < data.length; i++) {
-    const rowName = String(data[i][1]).trim().toUpperCase();
-    const rowArea = String(data[i][2]).trim().toUpperCase();
-    if (rowName === targetName && (!targetArea || rowArea === targetArea)) {
-      foundRow = i + 1;
-      break;
+    const rowName = String(data[i][1] || '').trim().toUpperCase();
+    const rowArea = String(data[i][2] || '').trim().toUpperCase();
+    if (rowName) {
+      lastFilledRow = i + 1;
+      if (rowName === targetName && (!targetArea || rowArea === targetArea)) {
+        if (foundRow === -1) {
+          foundRow = i + 1;
+        } else {
+          duplicateRows.push(i + 1);
+        }
+      }
     }
   }
 
   if (foundRow !== -1) {
     sheet.getRange(foundRow, 1, 1, rowValues.length).setValues([rowValues]);
+    for (let d = duplicateRows.length - 1; d >= 0; d--) {
+      sheet.deleteRow(duplicateRows[d]);
+    }
   } else {
-    sheet.appendRow(rowValues);
+    // DATA BARU: DITULIS KE BARIS KOSONG BERIKUTNYA KE BAWAH
+    const targetRow = lastFilledRow + 1;
+    sheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
   }
   SpreadsheetApp.flush();
 }
 
 function saveBulkStores(storeList) {
-  if (!Array.isArray(storeList)) return;
+  if (!Array.isArray(storeList) || storeList.length === 0) return;
   const sheet = getOrCreateSheet(SHEET_NAMES.STORES);
-  sheet.clearContents();
-  initSheetHeader(sheet, SHEET_NAMES.STORES);
+  const existingData = sheet.getDataRange().getValues();
 
-  if (storeList.length === 0) {
-    SpreadsheetApp.flush();
-    return;
+  const existingMap = new Map();
+  const duplicateRows = [];
+
+  for (let i = 1; i < existingData.length; i++) {
+    const name = String(existingData[i][1] || '').trim().toUpperCase();
+    const area = String(existingData[i][2] || 'BDG').trim().toUpperCase();
+    if (name) {
+      const key = `${name}_${area}`;
+      if (!existingMap.has(key)) {
+        existingMap.set(key, i + 1);
+      } else {
+        duplicateRows.push(i + 1);
+      }
+    }
   }
 
-  // Deduplikasi by Nama + Area
-  const map = new Map();
+  for (let d = duplicateRows.length - 1; d >= 0; d--) {
+    sheet.deleteRow(duplicateRows[d]);
+  }
+
+  const refreshedData = sheet.getDataRange().getValues();
+  const refreshedMap = new Map();
+  let currentLastRow = 1;
+
+  for (let i = 1; i < refreshedData.length; i++) {
+    const name = String(refreshedData[i][1] || '').trim().toUpperCase();
+    const area = String(refreshedData[i][2] || 'BDG').trim().toUpperCase();
+    if (name) {
+      currentLastRow = i + 1;
+      refreshedMap.set(`${name}_${area}`, i + 1);
+    }
+  }
+
+  const processedKeys = new Set();
+
   storeList.forEach(s => {
-    if (s && s.fullName) {
-      const key = `${String(s.fullName).trim().toUpperCase()}_${String(s.area || 'BDG').trim().toUpperCase()}`;
-      map.set(key, s);
+    if (!s || !s.fullName) return;
+    const key = `${String(s.fullName).trim().toUpperCase()}_${String(s.area || 'BDG').trim().toUpperCase()}`;
+    if (processedKeys.has(key)) return;
+    processedKeys.add(key);
+
+    const rowValues = [
+      s.id || `STK-${Date.now()}`,
+      s.fullName,
+      s.area || 'BDG',
+      s.storeCode || '',
+      s.createdBy || 'ADMIN'
+    ];
+
+    if (refreshedMap.has(key)) {
+      const rowIdx = refreshedMap.get(key);
+      sheet.getRange(rowIdx, 1, 1, rowValues.length).setValues([rowValues]);
+    } else {
+      // DATA BARU: DITULIS KE BARIS BERIKUTNYA KE BAWAH
+      currentLastRow++;
+      sheet.getRange(currentLastRow, 1, 1, rowValues.length).setValues([rowValues]);
+      refreshedMap.set(key, currentLastRow);
     }
   });
 
-  const uniqueStores = Array.from(map.values());
-  const rows = uniqueStores.map(s => [
-    s.id || `STK-${Date.now()}`,
-    s.fullName,
-    s.area || 'BDG',
-    s.storeCode || '',
-    s.createdBy || 'ADMIN'
-  ]);
-
-  if (rows.length > 0) {
-    sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
-  }
   SpreadsheetApp.flush();
 }
 
