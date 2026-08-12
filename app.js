@@ -4211,18 +4211,20 @@ function getAccessibleRequests() {
   const requests = getRequestsFromDB();
   if (!currentUser) return [];
 
+  const role = (currentUser.category || '').toUpperCase();
   if (
-    currentUser.category === 'ADMIN' ||
-    currentUser.category === 'DM' ||
+    role === 'ADMIN' ||
+    role === 'DM' ||
     (currentUser.username && currentUser.username.toUpperCase() === 'ADMIN')
   ) {
     return requests;
   }
 
-  if (currentUser.category === 'TOKO') {
+  if (role === 'TOKO' || role === 'GBJ') {
     return requests.filter(r => 
       r.userId === currentUser.id || 
-      r.toko.toUpperCase() === currentUser.fullName.toUpperCase()
+      (r.createdBy && r.createdBy.toUpperCase() === currentUser.fullName.toUpperCase()) ||
+      (r.toko && r.toko.toUpperCase() === currentUser.fullName.toUpperCase())
     );
   }
 
@@ -4379,6 +4381,8 @@ function updateStoreDropdownOptions(selectedStoreName = '') {
 
   if (currentUser.category === 'TOKO') {
     tokoSelect.innerHTML = `<option value="${currentUser.fullName}">${currentUser.fullName} (${currentUser.area})</option>`;
+  } else if (currentUser.category === 'GBJ') {
+    tokoSelect.innerHTML = `<option value="${currentUser.fullName || 'GBJ'}">${currentUser.fullName || 'GBJ'} (${currentUser.area})</option>`;
   } else {
     const allStores = getStoresFromDB();
     const areaStores = (currentUser.category === 'DM' || currentUser.area === 'ALL') 
@@ -4411,7 +4415,7 @@ function loadForm() {
 
   const containerTambahToko = document.getElementById('containerTambahToko');
   if (containerTambahToko) {
-    containerTambahToko.style.display = (currentUser.category === 'TOKO') ? 'none' : 'block';
+    containerTambahToko.style.display = (currentUser.category === 'TOKO' || currentUser.category === 'GBJ') ? 'none' : 'block';
   }
 
   if (typeof updatePhotoSectionVisibility === 'function') {
@@ -4995,10 +4999,21 @@ async function prosesSimpanKeDB(toko, jenis, catatan, items) {
     const autoServiceApprove = isDMUser ? true : false;
     const serviceUserNameVal = isDMUser ? (currentUser.fullName || currentUser.username) : '';
 
+    const ttdMap = JSON.parse(appStorage.getItem(TTD_DB_KEY) || '{}');
+    let pemohonTTD = currentUser.ttd || ttdMap[currentUser.id] || ttdMap[currentUser.username] || ttdMap[currentUser.fullName] || '';
+    if (!pemohonTTD && (currentUser.category === 'GBJ' || currentUser.category === 'TOKO')) {
+      pemohonTTD = ttdMap['GBJ'] || ttdMap[currentUser.storeCode] || '';
+    }
+
     let autoServiceTTD = '';
     if (isDMUser) {
-      const ttdMap = JSON.parse(appStorage.getItem(TTD_DB_KEY) || '{}');
-      autoServiceTTD = ttdMap[currentUser.id] || ttdMap[currentUser.username] || ttdMap['SERVICE_' + targetArea] || ttdMap['SERVICE'] || ttdMap['DM'] || '';
+      const users = getUsersFromDB();
+      const areaSvcUser = users.find(u => u && u.category === 'SERVICE' && isAreaMatch(u.area, targetArea));
+      if (areaSvcUser) {
+        autoServiceTTD = areaSvcUser.ttd || ttdMap[areaSvcUser.id] || ttdMap[areaSvcUser.username] || ttdMap[areaSvcUser.fullName] || ttdMap['SERVICE_' + targetArea] || '';
+      } else {
+        autoServiceTTD = ttdMap['SERVICE_' + targetArea] || '';
+      }
     }
 
     const initialLog = [];
@@ -5028,6 +5043,8 @@ async function prosesSimpanKeDB(toko, jenis, catatan, items) {
       serviceTTD: autoServiceTTD,
       dmUserName: '',
       dmTTD: '',
+      tokoTTD: pemohonTTD,
+      pemohonTTD: pemohonTTD,
       createdBy: currentUser.fullName,
       createdAt: `${getFormattedDateDDMMYYYY(now)} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`,
       log: initialLog
@@ -5063,6 +5080,8 @@ async function prosesSimpanKeDB(toko, jenis, catatan, items) {
       service_ttd: newRecord.serviceTTD || '',
       dm_user_name: '',
       dm_ttd: '',
+      toko_ttd: newRecord.tokoTTD || '',
+      pemohon_ttd: newRecord.pemohonTTD || '',
       created_by: newRecord.createdBy || '',
       created_at: newRecord.createdAt || '',
       user_id: newRecord.userId || '',
@@ -5532,7 +5551,12 @@ function approveService(noSurat) {
       requests[idx].serviceUserName = currentUser ? (currentUser.fullName || currentUser.username) : 'SERVICE';
 
       const ttdMap = JSON.parse(appStorage.getItem(TTD_DB_KEY) || '{}');
-      const sig = ttdMap[currentUser.id] || ttdMap[currentUser.username] || ttdMap['SERVICE_' + currentUser.area] || ttdMap['SERVICE'] || '';
+      const sig = (currentUser && currentUser.ttd) ||
+                  ttdMap[currentUser.id] || 
+                  ttdMap[currentUser.username] || 
+                  ttdMap[currentUser.fullName] || 
+                  ttdMap[`SERVICE_${currentUser.area}`] || 
+                  '';
       if (sig) {
         requests[idx].serviceTTD = sig;
       }
@@ -7409,17 +7433,20 @@ function bukaPdfModal(noSurat) {
   }).join('');
 
   const users = getUsersFromDB();
-  const serviceUser = users.find(u => u.category === 'SERVICE' && u.area === req.area) || users.find(u => u.category === 'SERVICE');
-  const dmUser = users.find(u => u.category === 'DM') || users.find(u => u.username === 'ADMIN');
+  const serviceUser = users.find(u => u && u.category === 'SERVICE' && (
+    (req.serviceUserName && String(u.fullName || u.username).toUpperCase() === String(req.serviceUserName).toUpperCase()) ||
+    (u.area && isAreaMatch(u.area, req.area))
+  ));
+  const dmUser = users.find(u => u && u.category === 'DM') || users.find(u => u && u.username === 'ADMIN');
   const serviceName = req.serviceUserName || (serviceUser ? serviceUser.fullName : 'SERVICE SUPERVISOR');
 
   const ttdMap = JSON.parse(appStorage.getItem(TTD_DB_KEY) || '{}');
   let serviceTTD = req.serviceTTD || '';
   if (!serviceTTD && serviceUser) {
-    serviceTTD = ttdMap[serviceUser.id] || ttdMap[serviceUser.username] || ttdMap[serviceUser.fullName] || '';
+    serviceTTD = serviceUser.ttd || ttdMap[serviceUser.id] || ttdMap[serviceUser.username] || ttdMap[serviceUser.fullName] || ttdMap['SERVICE_' + serviceUser.area] || '';
   }
-  if (!serviceTTD) {
-    serviceTTD = ttdMap['SERVICE_' + req.area] || ttdMap['SERVICE'] || ttdMap['HODS'] || '';
+  if (!serviceTTD && req.area) {
+    serviceTTD = ttdMap['SERVICE_' + req.area] || '';
   }
 
   let dmTTD = req.dmTTD || '';
@@ -7448,10 +7475,22 @@ function bukaPdfModal(noSurat) {
   );
 
   let tokoTTD = '';
-  if (!isCreatedByServiceOrAdmin) {
+  if (req.pemohonTTD) {
+    tokoTTD = req.pemohonTTD;
+  }
+  if (!tokoTTD && req.tokoTTD) {
+    tokoTTD = req.tokoTTD;
+  }
+  if (!tokoTTD && !isCreatedByServiceOrAdmin) {
     if (req.createdBy) {
-      tokoTTD = ttdMap[req.createdBy] || ttdMap[req.toko] || '';
+      tokoTTD = ttdMap[req.createdBy] || ttdMap[req.toko] || (creatorUser && (creatorUser.ttd || ttdMap[creatorUser.id] || ttdMap[creatorUser.username])) || '';
     }
+  }
+  if (!tokoTTD && req.userId) {
+    tokoTTD = ttdMap[req.userId] || (creatorUser && (creatorUser.ttd || ttdMap[creatorUser.fullName])) || '';
+  }
+  if (!tokoTTD && (creatorCategory === 'GBJ' || String(req.toko).toUpperCase().includes('GBJ') || String(req.createdBy).toUpperCase().includes('GBJ'))) {
+    tokoTTD = ttdMap['GBJ'] || '';
   }
 
   const nowPrint = new Date();
@@ -7605,7 +7644,7 @@ function bukaPdfModal(noSurat) {
             </div>
             <div style="width: 100%; text-align: center !important;">
               <div style="font-weight: 800; color: #0f172a; font-size: 11.5px; text-align: center !important;">${req.toko}</div>
-              <div style="font-size: 10px; color: #475569; margin-top: 2px; text-transform: uppercase; text-align: center !important;">PEMOHON (TOKO)</div>
+              <div style="font-size: 10px; color: #475569; margin-top: 2px; text-transform: uppercase; text-align: center !important;">PEMOHON (${(creatorCategory === 'GBJ' || String(req.toko).toUpperCase().includes('GBJ') || String(req.createdBy).toUpperCase().includes('GBJ')) ? 'GBJ' : 'TOKO'})</div>
             </div>
           </div>
 
@@ -8037,16 +8076,21 @@ function simpanTTD() {
     if (!canvasTTD) return;
     const png = cropAndCenterCanvasSignature(canvasTTD);
     const ttdMap = JSON.parse(appStorage.getItem(TTD_DB_KEY) || '{}');
-    const key = currentUser.category === 'DM' ? 'DM' : `SERVICE_${currentUser.area}`;
+    let key = currentUser.category === 'DM' ? 'DM' : `SERVICE_${currentUser.area}`;
+    if (currentUser.category === 'GBJ') key = 'GBJ';
     ttdMap[key] = png;
-    ttdMap[currentUser.fullName] = png;
-    ttdMap[currentUser.username] = png;
-    ttdMap[currentUser.id] = png;
+    if (currentUser.fullName) ttdMap[currentUser.fullName] = png;
+    if (currentUser.username) ttdMap[currentUser.username] = png;
+    if (currentUser.id) ttdMap[currentUser.id] = png;
     if (currentUser.category === 'SERVICE') {
-      ttdMap['SERVICE'] = png;
       ttdMap[`SERVICE_${currentUser.area}`] = png;
       ttdMap['HODS'] = png;
+      delete ttdMap['SERVICE'];
     }
+    if (currentUser.category === 'GBJ') {
+      ttdMap['GBJ'] = png;
+    }
+    currentUser.ttd = png;
     appStorage.setItem(TTD_DB_KEY, JSON.stringify(ttdMap));
     
     // SIMPAN PERSISTEN PADA PENYIMPANAN LOKAL (LOCALSTORAGE) PERANGKAT
@@ -9831,10 +9875,10 @@ function prosesBukaAkun() {
 
   const menuTTD = document.getElementById('menuTTD');
   if (menuTTD) {
-    menuTTD.style.display = (currentUser.category === 'SERVICE' || currentUser.category === 'DM') ? 'block' : 'none';
+    menuTTD.style.display = (currentUser.category === 'SERVICE' || currentUser.category === 'DM' || currentUser.category === 'GBJ') ? 'block' : 'none';
   }
 
-  const isToko = (currentUser.category === 'TOKO');
+  const isToko = (currentUser.category === 'TOKO' || currentUser.category === 'GBJ');
   const isAdmin = currentUser && (currentUser.category === 'ADMIN' || (currentUser.username && currentUser.username.toUpperCase() === 'ADMIN'));
   
   const menuKelolaTokoAkun = document.getElementById('menuKelolaTokoAkun');
