@@ -1,48 +1,41 @@
-// ==============================================================================================
-// 1. GOOGLE SHEETS / GOOGLE APPS SCRIPT DATABASE ENGINE
-// ==============================================================================================
-const GOOGLE_SCRIPT_URL_KEY = 'STORE_GOOGLE_SCRIPT_URL_V1';
+// 1. SUPABASE CLIENT & CREDENTIALS
+const SUPABASE_URL = 'https://vnlylgbkjmztnvjjgpjw.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_C7-RE-meqDyD8iXvp4COew_9Yhn8SWS';
+const SUPABASE_SECRET_KEY = 'sb_secret_9pTnKospBREpQH-QFngvnA_01fidjs7';
+const SUPABASE_JWKS_URL = 'https://vnlylgbkjmztnvjjgpjw.supabase.co/auth/v1/.well-known/jwks.json';
 
-function getGoogleScriptUrl() {
-  return (appStorage.getItem(GOOGLE_SCRIPT_URL_KEY) || (typeof localStorage !== 'undefined' ? localStorage.getItem(GOOGLE_SCRIPT_URL_KEY) : '') || '').trim();
-}
+const supabase = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY) : null;
 
-function saveGoogleScriptUrl(url) {
-  const clean = (url || '').trim();
-  if (clean) {
-    appStorage.setItem(GOOGLE_SCRIPT_URL_KEY, clean);
-    try { localStorage.setItem(GOOGLE_SCRIPT_URL_KEY, clean); } catch(e) {}
-  } else {
-    appStorage.removeItem(GOOGLE_SCRIPT_URL_KEY);
-    try { localStorage.removeItem(GOOGLE_SCRIPT_URL_KEY); } catch(e) {}
-  }
-}
-
-window.isGoogleSheetsOnline = false;
 window.isFirebaseOnline = true;
+window.isSupabaseOnline = true;
 
 function updateGlobalConnectionDotStatus() {
   const dot = document.getElementById('firebaseOnlineDot');
   if (!dot) return;
 
-  const gs = !!window.isGoogleSheetsOnline;
-  const hasUrl = !!getGoogleScriptUrl();
+  const fb = !!window.isFirebaseOnline;
+  const sb = !!window.isSupabaseOnline;
 
-  if (gs) {
+  if (fb && sb) {
     dot.style.background = '#10b981';
     dot.style.boxShadow = '0 0 10px #10b981';
-    dot.title = 'STATUS DATABASE: GOOGLE SHEETS TERHUBUNG & ONLINE (HIJAU)';
-    dot.onclick = () => showNotif('STATUS DATABASE: GOOGLE SHEETS ONLINE & TERHUBUNG DENGAN BAIK (HIJAU)', 'success');
-  } else if (hasUrl) {
+    dot.title = 'STATUS KONEKSI SISTEM: ONLINE TERHUBUNG (HIJAU)';
+    dot.onclick = () => showNotif('STATUS KONEKSI SISTEM: ONLINE TERHUBUNG SANGAT BAIK (HIJAU)', 'success');
+  } else if (fb && !sb) {
     dot.style.background = '#f59e0b';
     dot.style.boxShadow = '0 0 10px #f59e0b';
-    dot.title = 'STATUS DATABASE: MENGHUBUNGKAN KE GOOGLE SHEETS... (ORANGE)';
-    dot.onclick = () => showNotif('STATUS DATABASE: SEDANG MENGHUBUNGKAN KE GOOGLE SHEETS (ORANGE)', 'warning');
+    dot.title = 'STATUS KONEKSI SISTEM: KONEKSI STABIL (ORANGE)';
+    dot.onclick = () => showNotif('STATUS KONEKSI SISTEM: TERHUBUNG KONEKSI UTAMA (ORANGE)', 'warning');
+  } else if (!fb && sb) {
+    dot.style.background = '#f59e0b';
+    dot.style.boxShadow = '0 0 10px #f59e0b';
+    dot.title = 'STATUS KONEKSI SISTEM: KONEKSI CADANGAN (ORANGE)';
+    dot.onclick = () => showNotif('STATUS KONEKSI SISTEM: TERHUBUNG KONEKSI CADANGAN (ORANGE)', 'warning');
   } else {
-    dot.style.background = '#0284c7';
-    dot.style.boxShadow = '0 0 10px #0284c7';
-    dot.title = 'STATUS DATABASE: PENYIMPANAN LOKAL AKTIF (BIRU - MASUKKAN URL GOOGLE SHEETS DI ADMIN)';
-    dot.onclick = () => showNotif('STATUS DATABASE: PENYIMPANAN LOKAL AKTIF. MASUKKAN URL GOOGLE APPS SCRIPT DI MENU ADMIN UNTUK SINKRONISASI CLOUD GOOGLE DRIVE.', 'info');
+    dot.style.background = '#ef4444';
+    dot.style.boxShadow = '0 0 10px #ef4444';
+    dot.title = 'STATUS KONEKSI SISTEM: OFFLINE / TERPUTUS (MERAH)';
+    dot.onclick = () => showNotif('STATUS KONEKSI SISTEM: OFFLINE / TERPUTUS (MERAH)', 'error');
   }
 }
 window.updateGlobalConnectionDotStatus = updateGlobalConnectionDotStatus;
@@ -72,87 +65,25 @@ function parsePhotosArray(rawPhotos) {
 }
 window.parsePhotosArray = parsePhotosArray;
 
-async function callGoogleScript(action, payload = {}, method = 'GET') {
-  const scriptUrl = getGoogleScriptUrl();
-  if (!scriptUrl) return null;
-
-  try {
-    if (method === 'GET') {
-      const url = new URL(scriptUrl);
-      url.searchParams.set('action', action);
-      url.searchParams.set('_t', String(Date.now()));
-      const response = await fetch(url.toString(), {
-        method: 'GET',
-        mode: 'cors',
-        redirect: 'follow',
-        cache: 'no-cache'
+// CLEAN KEEP-ALIVE PING (PREVENTS 404 & 401 CONSOLE ERRORS)
+async function pingSupabaseKeepAlive() {
+  if (supabase) {
+    try {
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/health`, {
+        headers: { 'apikey': SUPABASE_PUBLISHABLE_KEY }
       });
-      if (response.ok) {
-        window.isGoogleSheetsOnline = true;
-        updateGlobalConnectionDotStatus();
-        return await response.json();
-      }
-    } else {
-      const bodyData = { action, ...payload, timestamp: Date.now() };
-      const response = await fetch(scriptUrl, {
-        method: 'POST',
-        mode: 'cors',
-        redirect: 'follow',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(bodyData)
-      });
-      if (response.ok) {
-        window.isGoogleSheetsOnline = true;
-        updateGlobalConnectionDotStatus();
-        return await response.json();
-      }
+      window.isSupabaseOnline = (res.ok || res.status === 200);
+    } catch (e) {
+      window.isSupabaseOnline = false;
     }
-  } catch (err) {
-    // Suppress network error floods if user has not yet set permissions to Anyone
-    console.warn(`[GOOGLE APPS SCRIPT API ${action} NOTICE]:`, err.message || err);
+  } else {
+    window.isSupabaseOnline = false;
   }
-  return null;
+  updateGlobalConnectionDotStatus();
 }
-
-// BACKGROUND GOOGLE SPREADSHEET ASYNC DISPATCHER
-let isGoogleSheetSyncing = false;
-
-function setBackgroundSyncBadge(isSyncing) {
-  isGoogleSheetSyncing = isSyncing;
-  const dot = document.getElementById('firebaseOnlineDot');
-  if (dot) {
-    if (isSyncing) {
-      dot.title = "MENYINKRONKAN DATA KE GOOGLE SPREADSHEET (LATAR BELAKANG)...";
-      dot.style.boxShadow = "0 0 10px #38bdf8";
-      dot.style.opacity = "0.7";
-    } else {
-      dot.title = "KONEKSI DATABASE GOOGLE SPREADSHEET ONLINE";
-      dot.style.boxShadow = "none";
-      dot.style.opacity = "1";
-    }
-  }
-}
-
-async function sendGoogleSheetInBackground(action, payload = {}) {
-  try {
-    setBackgroundSyncBadge(true);
-    const res = await callGoogleScript(action, payload, 'POST');
-    return res;
-  } catch (err) {
-    console.warn(`[BACKGROUND GOOGLE APPS SCRIPT NOTICE - ${action}]:`, err.message || err);
-    return null;
-  } finally {
-    setBackgroundSyncBadge(false);
-  }
-}
-window.sendGoogleSheetInBackground = sendGoogleSheetInBackground;
-
-function executeGoogleSheetActionAndRefresh(action, payload = {}) {
-  // Jalankan di latar belakang secara asinkron tanpa menahan layar atau memblokir pengguna
-  sendGoogleSheetInBackground(action, payload);
-  return Promise.resolve({ status: 'success' });
-}
-window.executeGoogleSheetActionAndRefresh = executeGoogleSheetActionAndRefresh;
+try {
+  pingSupabaseKeepAlive();
+} catch (e) {}
 
 // FIREBASE LIVE CONNECTION MONITOR
 if (typeof firebase !== 'undefined' && firebase.database) {
@@ -321,13 +252,46 @@ async function setGlobalAdminTheme(themeName) {
   applyThemeToDocument(themeName);
 
   if (isSysAdmin) {
-    callGoogleScript('saveSettings', { key: 'globalTheme', value: themeName }, 'POST').catch(e => console.warn(e));
+    if (typeof supabase !== 'undefined' && supabase) {
+      try {
+        try {
+          await supabase.from('lookup').upsert({
+            code: 'GLOBAL_THEME',
+            type: themeName,
+            updated_at: new Date().toISOString()
+          });
+        } catch (e) {}
+
+        const themeRow = {
+          id: '__SYSTEM_GLOBAL_THEME__',
+          no_surat: '__SYSTEM_GLOBAL_THEME__',
+          tanggal: typeof getFormattedDateDDMMYYYY === 'function' ? getFormattedDateDDMMYYYY() : '',
+          toko: 'SYSTEM',
+          area: 'ALL',
+          jenis: 'SYSTEM',
+          catatan: JSON.stringify({ theme: themeName, updatedBy: currentUser.username, time: now }),
+          items: [],
+          photos: [],
+          status: 'DONE',
+          service_approve: true,
+          created_by: 'ADMIN',
+          created_at: new Date().toISOString()
+        };
+        await supabase.from('permintaan_toko').upsert(themeRow);
+      } catch(e) {
+        console.warn('[SUPABASE GLOBAL THEME SAVE ERROR]:', e);
+      }
+    }
 
     if (typeof dbRealtime !== 'undefined' && dbRealtime) {
       try {
         dbRealtime.ref('settings/global_theme').set({ theme: themeName, updatedBy: currentUser.username, time: now });
       } catch(e) {}
     }
+
+    // Theme notification silent
+  } else {
+    // Theme notification silent
   }
 }
 window.setGlobalAdminTheme = setGlobalAdminTheme;
@@ -498,7 +462,39 @@ function tambahNotifikasiSistem(targetRoles, targetArea, message, noSurat = '') 
   appStorage.setItem(NOTIFICATIONS_DB_KEY, JSON.stringify(payload));
   try { localStorage.setItem(NOTIFICATIONS_DB_KEY, JSON.stringify(payload)); } catch(e) {}
 
-  if (typeof pushCentralCloudDB === 'function') pushCentralCloudDB();
+  if (typeof supabase !== 'undefined' && supabase) {
+    try {
+      supabase.from('notifications').upsert({
+        id: newNotif.id,
+        target_roles: newNotif.targetRoles,
+        target_area: newNotif.targetArea,
+        message: newNotif.message,
+        no_surat: newNotif.noSurat,
+        time: newNotif.time,
+        read_by: newNotif.readBy || []
+      }).catch(e => console.warn('[SUPABASE NOTIF TABLE NOTICE]:', e));
+
+      const systemNotifRow = {
+        id: '__SYSTEM_NOTIFICATIONS__',
+        no_surat: '__SYSTEM_NOTIFICATIONS__',
+        tanggal: typeof getFormattedDateDDMMYYYY === 'function' ? getFormattedDateDDMMYYYY() : '',
+        toko: 'SYSTEM',
+        area: 'ALL',
+        jenis: 'SYSTEM',
+        catatan: JSON.stringify(payload),
+        items: [],
+        photos: [],
+        status: 'DONE',
+        service_approve: true,
+        created_by: 'SYSTEM',
+        created_at: new Date().toISOString()
+      };
+      supabase.from('permintaan_toko').upsert(systemNotifRow).then(({ error }) => {
+        if (error) console.warn('[SUPABASE NOTIF SAVE NOTICE]:', error.message);
+      });
+    } catch(e) {}
+  }
+
   updateNotifBellCounter();
 }
 
@@ -865,7 +861,28 @@ function markNotifAsRead(notifId, noSurat = '') {
     appStorage.setItem(NOTIFICATIONS_DB_KEY, JSON.stringify(payload));
     try { localStorage.setItem(NOTIFICATIONS_DB_KEY, JSON.stringify(payload)); } catch(e) {}
 
-    if (typeof pushCentralCloudDB === 'function') pushCentralCloudDB();
+    if (typeof supabase !== 'undefined' && supabase) {
+      try {
+        const systemNotifRow = {
+          id: '__SYSTEM_NOTIFICATIONS__',
+          no_surat: '__SYSTEM_NOTIFICATIONS__',
+          tanggal: typeof getFormattedDateDDMMYYYY === 'function' ? getFormattedDateDDMMYYYY() : '',
+          toko: 'SYSTEM',
+          area: 'ALL',
+          jenis: 'SYSTEM',
+          catatan: JSON.stringify(payload),
+          items: [],
+          photos: [],
+          status: 'DONE',
+          service_approve: true,
+          created_by: 'SYSTEM',
+          created_at: new Date().toISOString()
+        };
+        supabase.from('permintaan_toko').upsert(systemNotifRow).then(({ error }) => {
+          if (error) console.warn('[SUPABASE NOTIF SAVE NOTICE]:', error.message);
+        });
+      } catch(e) {}
+    }
   }
 
   updateNotifBellCounter();
@@ -909,7 +926,29 @@ function markAllNotifAsRead(silent = false) {
   appStorage.setItem(NOTIFICATIONS_DB_KEY, JSON.stringify(payload));
   try { localStorage.setItem(NOTIFICATIONS_DB_KEY, JSON.stringify(payload)); } catch(e) {}
 
-  if (typeof pushCentralCloudDB === 'function') pushCentralCloudDB();
+  if (typeof supabase !== 'undefined' && supabase) {
+    try {
+      const systemNotifRow = {
+        id: '__SYSTEM_NOTIFICATIONS__',
+        no_surat: '__SYSTEM_NOTIFICATIONS__',
+        tanggal: typeof getFormattedDateDDMMYYYY === 'function' ? getFormattedDateDDMMYYYY() : '',
+        toko: 'SYSTEM',
+        area: 'ALL',
+        jenis: 'SYSTEM',
+        catatan: JSON.stringify(payload),
+        items: [],
+        photos: [],
+        status: 'DONE',
+        service_approve: true,
+        created_by: 'SYSTEM',
+        created_at: new Date().toISOString()
+      };
+      supabase.from('permintaan_toko').upsert(systemNotifRow).then(({ error }) => {
+        if (error) console.warn('[SUPABASE NOTIF SAVE NOTICE]:', error.message);
+      });
+    } catch(e) {}
+  }
+
   updateNotifBellCounter();
   loadNotificationList();
 
@@ -941,6 +980,31 @@ function hapusSemuaNotifikasiSystem() {
       appStorage.setItem(NOTIFICATIONS_DB_KEY, JSON.stringify(emptyNotifsPayload));
       try { localStorage.setItem(NOTIFICATIONS_DB_KEY, JSON.stringify(emptyNotifsPayload)); } catch(e) {}
 
+      // 2. SINKRONKAN PERSISTEN LANGSUNG KE SUPABASE CLOUD DATABASE
+      if (typeof supabase !== 'undefined' && supabase) {
+        try {
+          const systemNotifRow = {
+            id: '__SYSTEM_NOTIFICATIONS__',
+            no_surat: '__SYSTEM_NOTIFICATIONS__',
+            tanggal: typeof getFormattedDateDDMMYYYY === 'function' ? getFormattedDateDDMMYYYY() : '',
+            toko: 'SYSTEM',
+            area: 'ALL',
+            jenis: 'SYSTEM',
+            catatan: JSON.stringify(emptyNotifsPayload),
+            items: [],
+            photos: [],
+            status: 'DONE',
+            service_approve: true,
+            created_by: 'SYSTEM',
+            created_at: new Date().toISOString()
+          };
+          await supabase.from('permintaan_toko').upsert(systemNotifRow);
+        } catch(sbErr) {
+          console.warn('[SUPABASE NOTIF DELETE ERROR]:', sbErr);
+        }
+      }
+
+      // 3. PUSH KE DATABASE UTAMA LAIN
       if (typeof pushCentralCloudDB === 'function') {
         await pushCentralCloudDB();
       }
@@ -974,6 +1038,43 @@ function generateStoreCode(namaToko) {
     const clean = namaToko.toUpperCase().replace(/[^A-Z]/g, '');
     return (clean.length >= 2 ? clean.substring(0, 2) : 'TK');
   }
+}
+
+function getStoresFromDB() {
+  const localStores = JSON.parse(appStorage.getItem(STORES_DB_KEY) || '[]');
+  const deletedStoreKeys = JSON.parse(appStorage.getItem(DELETED_STORES_KEY) || '[]');
+  const safeDeletedKeys = Array.isArray(deletedStoreKeys) ? deletedStoreKeys : [];
+  const users = getUsersFromDB();
+  const userStores = users.filter(u => u && u.category === 'TOKO').map(u => ({
+    id: u.id,
+    fullName: u.fullName || 'TOKO',
+    area: u.area || '',
+    storeCode: u.storeCode || generateStoreCode(u.fullName || '')
+  }));
+
+  const map = new Map();
+  userStores.forEach(s => {
+    if (s && s.fullName) {
+      const key = `${String(s.fullName).toUpperCase()}_${String(s.area || '').toUpperCase()}`;
+      map.set(key, s);
+    }
+  });
+
+  if (Array.isArray(localStores)) {
+    localStores.forEach(s => {
+      if (s && s.fullName) {
+        const key = `${String(s.fullName).toUpperCase()}_${String(s.area || '').toUpperCase()}`;
+        map.set(key, s);
+      }
+    });
+  }
+
+  const allStores = Array.from(map.values());
+  return allStores.filter(s => {
+    if (!s || !s.fullName) return false;
+    const key = `${String(s.fullName).toUpperCase()}_${String(s.area || '').toUpperCase()}`;
+    return !safeDeletedKeys.includes(key);
+  });
 }
 
 // 10 THEME MODES
@@ -1097,19 +1198,46 @@ function formatDateDDMMYYYYString(input) {
   return str;
 }
 
+function getRequestsFromDB() {
+  return JSON.parse(appStorage.getItem(REQUESTS_DB_KEY) || '[]');
+}
+
+function saveRequestsToDB(requests) {
+  appStorage.setItem(REQUESTS_DB_KEY, JSON.stringify(requests));
+  if (typeof pushCentralCloudDB === 'function') {
+    pushCentralCloudDB();
+  }
+}
+
+function getUsersFromDB() {
+  return JSON.parse(appStorage.getItem(USERS_DB_KEY) || '[]');
+}
+
+function saveUsersToDB(users) {
+  appStorage.setItem(USERS_DB_KEY, JSON.stringify(users));
+  if (typeof pushCentralCloudDB === 'function') {
+    pushCentralCloudDB();
+  }
+}
+
 // APP INITIALIZATION
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     closeAllPopups();
 
-    if (typeof initGoogleScriptClient === 'function') {
-      await initGoogleScriptClient();
+    if (typeof loadSupabaseConfigFromJson === 'function') {
+      await loadSupabaseConfigFromJson();
+    }
+    
+    if (typeof initSupabaseDB === 'function') {
+      await initSupabaseDB();
     }
     
     if (typeof initDatabase === 'function') {
       initDatabase();
     } 
     if (typeof startCentralCloudSyncEngine === 'function') startCentralCloudSyncEngine();
+    if (typeof startSupabaseKeepalive === 'function') startSupabaseKeepalive();
     loadSavedTheme();
 
     const loginForm = document.getElementById('loginForm');
@@ -1203,35 +1331,14 @@ window.toggleAdminReminderFeature = toggleAdminReminderFeature;
 
 const ADMIN_REMINDER_TIME_KEY = 'STORE_ADMIN_REMINDER_TIME_KEY_V7';
 
-function formatToCleanTimeHHmm(raw) {
-  if (!raw) return '09:00';
-  const str = String(raw).trim();
-  if (/^\d{2}:\d{2}$/.test(str)) return str;
-
-  // Handle multiple comma separated times like "09:00, 14:00"
-  if (str.includes(',')) {
-    const parts = str.split(',').map(p => formatToCleanTimeHHmm(p.trim()));
-    return parts.join(', ');
-  }
-
-  // If string contains time format inside date e.g. "Sat Dec 30 1899 09:00:00 GMT+0707"
-  const match = str.match(/(\d{1,2}):(\d{2})/);
-  if (match) {
-    return `${match[1].padStart(2, '0')}:${match[2]}`;
-  }
-  return '09:00';
-}
-window.formatToCleanTimeHHmm = formatToCleanTimeHHmm;
-
 function getAdminReminderTime() {
-  const raw = appStorage.getItem(ADMIN_REMINDER_TIME_KEY) || '09:00';
-  return formatToCleanTimeHHmm(raw);
+  return appStorage.getItem(ADMIN_REMINDER_TIME_KEY) || '09:00';
 }
 
 function simpanAdminReminderTime() {
   const input = document.getElementById('adminReminderTimeInput');
   if (!input) return;
-  const val = formatToCleanTimeHHmm(input.value.trim());
+  const val = input.value.trim();
   if (val) {
     appStorage.setItem(ADMIN_REMINDER_TIME_KEY, val);
     pushCentralCloudDB();
@@ -1611,309 +1718,746 @@ function simpanFirebaseConfigUser() {
   }
 }
 
-function startCentralCloudSyncEngine() {
-  initFirebaseDB();
-  initGlobalRealtimeSyncEngine();
-  if (typeof setOnDataChangeCallback === 'function') {
-    setOnDataChangeCallback(onSupabaseDataChange);
-  }
-  if (cloudSyncInterval) {
-    clearInterval(cloudSyncInterval);
-    cloudSyncInterval = null;
-  }
-}
+const SUPABASE_LAST_SYNC_KEY = 'STORE_SUPABASE_LAST_SYNC_V7';
+let supabaseRealtimeChannel = null;
 
-function initGlobalRealtimeSyncEngine() {
-  // NONAKTIFKAN INTERVAL OTOMATIS: Pengiriman & penarikan data tidak lagi berjalan otomatis di latar belakang
-  if (window.globalFastRealtimeTimer) {
-    clearInterval(window.globalFastRealtimeTimer);
-    window.globalFastRealtimeTimer = null;
-  }
-}
+// ==========================================
+// 1. SUPABASE REALTIME ENGINE (EVENT-DRIVEN)
+// ==========================================
+function initSupabaseRealtimeEngine() {
+  if (typeof supabase === 'undefined' || !supabase) return;
 
-async function onGlobalDataChangedRealtime(source) {
-  // Hanya memperbarui tampilan antarmuka jika dipanggil secara manual
+  if (supabaseRealtimeChannel) {
+    try {
+      supabase.removeChannel(supabaseRealtimeChannel);
+    } catch (e) {}
+    supabaseRealtimeChannel = null;
+  }
+
   try {
-    if (currentUser) {
-      if (typeof loadDashboard === 'function') loadDashboard();
-      if (typeof loadRiwayat === 'function') loadRiwayat();
-      const hasCheckedMaster = document.querySelectorAll('.masterDbCheckbox:checked').length > 0;
-      if (!hasCheckedMaster && typeof loadMasterDbTable === 'function' && document.getElementById('masterDbTableBody')) {
-        loadMasterDbTable();
+    supabaseRealtimeChannel = supabase
+      .channel('public_realtime_sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'permintaan_toko' },
+        (payload) => {
+          handleRealtimePermintaanToko(payload);
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'notifications' },
+        (payload) => {
+          handleRealtimeNotification(payload);
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'chat_messages' },
+        (payload) => {
+          handleRealtimeChatMessage(payload);
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'users' },
+        (payload) => {
+          handleRealtimeUserChange(payload);
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'toko_list' },
+        (payload) => {
+          handleRealtimeStoreChange(payload);
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          window.isSupabaseOnline = true;
+          updateGlobalConnectionDotStatus();
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          window.isSupabaseOnline = false;
+          updateGlobalConnectionDotStatus();
+        }
+      });
+  } catch (err) {
+    console.warn('[SUPABASE REALTIME INIT NOTICE]:', err);
+  }
+}
+window.initSupabaseRealtimeEngine = initSupabaseRealtimeEngine;
+
+// Helper: Format raw row from Supabase permintaan_toko
+function formatSupabaseRequestRow(row) {
+  if (!row) return null;
+  const noSurat = row.no_surat || row.noSurat || '';
+  if (!noSurat) return null;
+
+  return {
+    noSurat: noSurat,
+    tanggal: row.tanggal || '',
+    toko: row.toko || '',
+    area: row.area || 'BDG',
+    jenis: row.jenis || '',
+    catatan: row.catatan || '',
+    items: Array.isArray(row.items) ? row.items : (typeof row.items === 'string' ? JSON.parse(row.items || '[]') : []),
+    photos: parsePhotosArray(row.photos || row.foto),
+    artemisPhotos: parsePhotosArray(row.artemis_photos || row.artemisPhotos),
+    status: row.status || 'PENDING',
+    serviceApprove: row.service_approve !== undefined ? !!row.service_approve : !!row.serviceApprove,
+    serviceUserName: row.service_user_name || row.serviceUserName || '',
+    serviceTTD: row.service_ttd || row.serviceTTD || '',
+    dmUserName: row.dm_user_name || row.dmUserName || '',
+    dmTTD: row.dm_ttd || row.dmTTD || '',
+    createdBy: row.created_by || row.createdBy || '',
+    createdAt: row.created_at || row.createdAt || '',
+    userId: row.user_id || row.userId || '',
+    log: Array.isArray(row.log) ? row.log : (typeof row.log === 'string' ? JSON.parse(row.log || '[]') : [])
+  };
+}
+
+// Check if user has permission to see request
+function isRequestVisibleToCurrentUser(r) {
+  if (!currentUser || !r) return true;
+  const cat = String(currentUser.category || '').toUpperCase();
+  const userArea = String(currentUser.area || '').toUpperCase();
+
+  if (cat === 'ADMIN') return true;
+  if (cat === 'SERVICE') {
+    if (userArea === 'ALL' || userArea === 'TSM') return true;
+    return String(r.area || '').toUpperCase() === userArea;
+  }
+  if (cat === 'DM') {
+    if (userArea === 'ALL') return true;
+    return String(r.area || '').toUpperCase() === userArea;
+  }
+  if (cat === 'TOKO') {
+    if (r.userId && currentUser.id && String(r.userId) === String(currentUser.id)) return true;
+    if (r.toko && currentUser.fullName && String(r.toko).trim().toUpperCase() === String(currentUser.fullName).trim().toUpperCase()) return true;
+    return false;
+  }
+  return true;
+}
+
+// REALTIME: Handle permintaan_toko changes (INSERT, UPDATE, DELETE)
+function handleRealtimePermintaanToko(payload) {
+  try {
+    const eventType = payload.eventType;
+    const requests = getRequestsFromDB();
+
+    if (eventType === 'INSERT') {
+      const newRow = formatSupabaseRequestRow(payload.new);
+      if (newRow && !newRow.noSurat.startsWith('__SYSTEM_') && isRequestVisibleToCurrentUser(newRow)) {
+        const existsIdx = requests.findIndex(r => r && String(r.noSurat).trim().toUpperCase() === String(newRow.noSurat).trim().toUpperCase());
+        if (existsIdx === -1) {
+          requests.unshift(newRow);
+        } else {
+          requests[existsIdx] = { ...requests[existsIdx], ...newRow };
+        }
+        appStorage.setItem(REQUESTS_DB_KEY, JSON.stringify(requests));
+        refreshRealtimeUI();
       }
-      if (typeof loadUsersManagement === 'function' && document.getElementById('userTableBody')) loadUsersManagement();
-      if (typeof loadDaftarTokoModal === 'function' && document.getElementById('daftarTokoTableBody')) loadDaftarTokoModal();
-      if (typeof updateStoreDropdownOptions === 'function') updateStoreDropdownOptions();
-      if (typeof refreshActiveChatUI === 'function') refreshActiveChatUI();
-      if (typeof updateNotifBellCounter === 'function') updateNotifBellCounter();
-      if (typeof updatePhotoSectionVisibility === 'function') updatePhotoSectionVisibility();
+    } else if (eventType === 'UPDATE') {
+      const updatedRow = formatSupabaseRequestRow(payload.new);
+      if (updatedRow && !updatedRow.noSurat.startsWith('__SYSTEM_')) {
+        const idx = requests.findIndex(r => r && String(r.noSurat).trim().toUpperCase() === String(updatedRow.noSurat).trim().toUpperCase());
+        if (idx !== -1) {
+          requests[idx] = { ...requests[idx], ...updatedRow };
+          appStorage.setItem(REQUESTS_DB_KEY, JSON.stringify(requests));
+          refreshRealtimeUI();
+        } else if (isRequestVisibleToCurrentUser(updatedRow)) {
+          requests.unshift(updatedRow);
+          appStorage.setItem(REQUESTS_DB_KEY, JSON.stringify(requests));
+          refreshRealtimeUI();
+        }
+      }
+    } else if (eventType === 'DELETE') {
+      const delNoSurat = payload.old ? (payload.old.no_surat || payload.old.noSurat || payload.old.id) : null;
+      if (delNoSurat) {
+        const filtered = requests.filter(r => r && String(r.noSurat).trim().toUpperCase() !== String(delNoSurat).trim().toUpperCase());
+        appStorage.setItem(REQUESTS_DB_KEY, JSON.stringify(filtered));
+        refreshRealtimeUI();
+      }
     }
-  } catch(e) {
-    console.warn('[MANUAL SYNC NOTICE]:', e);
+  } catch (err) {
+    console.warn('[REALTIME PERMINTAAN ERROR]:', err);
   }
 }
-window.initGlobalRealtimeSyncEngine = initGlobalRealtimeSyncEngine;
 
-// ==============================================================================================
-// 2. GOOGLE SHEETS CLOUD SYNC & PUSH ENGINE (PENGGANTI SUPABASE)
-// ==============================================================================================
-
-async function syncGoogleSheetRequestsToLocalCache() {
-  const scriptUrl = getGoogleScriptUrl();
-  if (!scriptUrl) return;
+// REALTIME: Handle notifications changes
+function handleRealtimeNotification(payload) {
   try {
-    const res = await callGoogleScript('getRequests', {}, 'GET');
-    if (res && res.status === 'success' && Array.isArray(res.requests)) {
+    const eventType = payload.eventType;
+    let notifs = getSystemNotifications();
+
+    if (eventType === 'INSERT' && payload.new) {
+      const n = payload.new;
+      const parsed = {
+        id: n.id,
+        targetRoles: n.target_roles || n.targetRoles || [],
+        targetArea: n.target_area || n.targetArea || 'ALL',
+        message: n.message,
+        noSurat: n.no_surat || n.noSurat || '',
+        time: n.time || `${getFormattedDateDDMMYYYY()} ${new Date().toLocaleTimeString('id-ID')}`,
+        readBy: n.read_by || n.readBy || []
+      };
+
+      if (!notifs.some(x => x.id === parsed.id)) {
+        notifs.unshift(parsed);
+        appStorage.setItem(NOTIFICATIONS_DB_KEY, JSON.stringify(notifs));
+        try { localStorage.setItem(NOTIFICATIONS_DB_KEY, JSON.stringify(notifs)); } catch(e) {}
+        if (typeof updateNotifBellCounter === 'function') updateNotifBellCounter();
+        const popupNotifList = document.getElementById('popupNotifList');
+        if (popupNotifList && (popupNotifList.classList.contains('show') || popupNotifList.style.display === 'flex')) {
+          if (typeof loadNotificationList === 'function') loadNotificationList();
+        }
+      }
+    } else if (eventType === 'UPDATE' && payload.new) {
+      const n = payload.new;
+      const idx = notifs.findIndex(x => x.id === n.id);
+      if (idx !== -1) {
+        notifs[idx] = { ...notifs[idx], ...n };
+        appStorage.setItem(NOTIFICATIONS_DB_KEY, JSON.stringify(notifs));
+        if (typeof updateNotifBellCounter === 'function') updateNotifBellCounter();
+      }
+    } else if (eventType === 'DELETE' && payload.old) {
+      notifs = notifs.filter(x => x.id !== payload.old.id);
+      appStorage.setItem(NOTIFICATIONS_DB_KEY, JSON.stringify(notifs));
+      if (typeof updateNotifBellCounter === 'function') updateNotifBellCounter();
+    }
+  } catch (err) {
+    console.warn('[REALTIME NOTIF ERROR]:', err);
+  }
+}
+
+// REALTIME: Handle chat message changes
+function handleRealtimeChatMessage(payload) {
+  try {
+    const eventType = payload.eventType;
+    let chats = JSON.parse(appStorage.getItem(CHAT_DB_KEY) || '[]');
+
+    if (eventType === 'INSERT' && payload.new) {
+      const c = payload.new;
+      if (!chats.some(x => x.id === c.id)) {
+        chats.push(c);
+        appStorage.setItem(CHAT_DB_KEY, JSON.stringify(chats));
+        try { localStorage.setItem(CHAT_DB_KEY, JSON.stringify(chats)); } catch(e) {}
+        if (typeof refreshActiveChatUI === 'function') refreshActiveChatUI();
+        if (typeof cekUnreadNotif === 'function') cekUnreadNotif();
+      }
+    }
+  } catch(e) {}
+}
+
+// REALTIME: Handle user changes
+function handleRealtimeUserChange(payload) {
+  try {
+    const eventType = payload.eventType;
+    let users = getUsersFromDB();
+
+    if ((eventType === 'INSERT' || eventType === 'UPDATE') && payload.new) {
+      const u = payload.new;
+      const formatted = {
+        id: u.id,
+        username: String(u.username || '').trim(),
+        password: String(u.password || '').trim(),
+        fullName: String(u.full_name || u.fullName || '').trim(),
+        storeCode: String(u.store_code || u.storeCode || '').trim(),
+        phone: String(u.phone || '').trim(),
+        category: String(u.category || 'TOKO').trim().toUpperCase(),
+        area: String(u.area || 'BDG').trim().toUpperCase(),
+        createdAt: u.created_at || (typeof getFormattedDateDDMMYYYY === 'function' ? getFormattedDateDDMMYYYY() : '')
+      };
+
+      const idx = users.findIndex(x => x && (x.id === formatted.id || String(x.username).toUpperCase() === formatted.username.toUpperCase()));
+      if (idx !== -1) {
+        users[idx] = { ...users[idx], ...formatted };
+      } else {
+        users.push(formatted);
+      }
+      appStorage.setItem(USERS_DB_KEY, JSON.stringify(users));
+      try { localStorage.setItem(USERS_DB_KEY, JSON.stringify(users)); } catch(e) {}
+      if (typeof loadUsersManagement === 'function' && document.getElementById('userTableBody')) loadUsersManagement();
+    } else if (eventType === 'DELETE' && payload.old) {
+      users = users.filter(x => x.id !== payload.old.id && String(x.username).toUpperCase() !== String(payload.old.username).toUpperCase());
+      appStorage.setItem(USERS_DB_KEY, JSON.stringify(users));
+      try { localStorage.setItem(USERS_DB_KEY, JSON.stringify(users)); } catch(e) {}
+      if (typeof loadUsersManagement === 'function' && document.getElementById('userTableBody')) loadUsersManagement();
+    }
+  } catch(e) {}
+}
+
+// REALTIME: Handle store changes
+function handleRealtimeStoreChange(payload) {
+  try {
+    const eventType = payload.eventType;
+    let stores = typeof getStoresFromDB === 'function' ? getStoresFromDB() : [];
+
+    if ((eventType === 'INSERT' || eventType === 'UPDATE') && payload.new) {
+      const s = payload.new;
+      const formatted = {
+        id: s.id || `STK-${s.store_code || Date.now()}`,
+        fullName: String(s.full_name || s.fullName || '').trim(),
+        area: String(s.area || 'BDG').trim().toUpperCase(),
+        storeCode: String(s.store_code || s.storeCode || '').trim(),
+        createdBy: String(s.created_by || s.createdBy || 'ADMIN').trim()
+      };
+
+      const idx = stores.findIndex(x => x.id === formatted.id || (x.fullName && x.fullName.toUpperCase() === formatted.fullName.toUpperCase()));
+      if (idx !== -1) {
+        stores[idx] = { ...stores[idx], ...formatted };
+      } else {
+        stores.push(formatted);
+      }
+      appStorage.setItem(STORES_DB_KEY, JSON.stringify(stores));
+      try { localStorage.setItem(STORES_DB_KEY, JSON.stringify(stores)); } catch(e) {}
+      if (typeof updateStoreDropdownOptions === 'function') updateStoreDropdownOptions();
+      if (typeof loadDaftarTokoModal === 'function') loadDaftarTokoModal();
+    } else if (eventType === 'DELETE' && payload.old) {
+      stores = stores.filter(x => x.id !== payload.old.id && String(x.fullName).toUpperCase() !== String(payload.old.full_name).toUpperCase());
+      appStorage.setItem(STORES_DB_KEY, JSON.stringify(stores));
+      try { localStorage.setItem(STORES_DB_KEY, JSON.stringify(stores)); } catch(e) {}
+      if (typeof updateStoreDropdownOptions === 'function') updateStoreDropdownOptions();
+      if (typeof loadDaftarTokoModal === 'function') loadDaftarTokoModal();
+    }
+  } catch(e) {}
+}
+
+function refreshRealtimeUI() {
+  if (currentUser) {
+    if (typeof loadDashboard === 'function') loadDashboard();
+    if (typeof loadRiwayat === 'function') loadRiwayat();
+    const hasCheckedMaster = document.querySelectorAll('.masterDbCheckbox:checked').length > 0;
+    if (!hasCheckedMaster && typeof loadMasterDbTable === 'function' && document.getElementById('masterDbTableBody')) {
+      loadMasterDbTable();
+    }
+    if (typeof updateNotifBellCounter === 'function') updateNotifBellCounter();
+  }
+}
+
+// =======================================================================
+// 2. INCREMENTAL DELTA SYNC USING updated_at (0 KB INITIAL BANDWIDTH)
+// =======================================================================
+async function syncSupabaseIncremental() {
+  if (typeof supabase === 'undefined' || !supabase) return;
+
+  try {
+    const lastSync = appStorage.getItem(SUPABASE_LAST_SYNC_KEY) || (typeof localStorage !== 'undefined' ? localStorage.getItem(SUPABASE_LAST_SYNC_KEY) : null);
+    
+    // If no previous sync timestamp exists, perform full initial sync
+    if (!lastSync) {
+      await syncAllDataToCache();
+      const nowIso = new Date().toISOString();
+      appStorage.setItem(SUPABASE_LAST_SYNC_KEY, nowIso);
+      try { localStorage.setItem(SUPABASE_LAST_SYNC_KEY, nowIso); } catch(e) {}
+      return;
+    }
+
+    // Light Delta Query to Supabase for modified/new rows
+    const { data: deltaReqs, error } = await supabase
+      .from('permintaan_toko')
+      .select('*')
+      .gt('updated_at', lastSync);
+
+    if (!error && Array.isArray(deltaReqs) && deltaReqs.length > 0) {
+      const currentReqs = getRequestsFromDB();
+      let hasChanges = false;
+
+      deltaReqs.forEach(row => {
+        const formatted = formatSupabaseRequestRow(row);
+        if (formatted && !formatted.noSurat.startsWith('__SYSTEM_') && isRequestVisibleToCurrentUser(formatted)) {
+          const idx = currentReqs.findIndex(r => r && String(r.noSurat).trim().toUpperCase() === String(formatted.noSurat).trim().toUpperCase());
+          if (idx !== -1) {
+            currentReqs[idx] = { ...currentReqs[idx], ...formatted };
+          } else {
+            currentReqs.unshift(formatted);
+          }
+          hasChanges = true;
+        }
+      });
+
+      if (hasChanges) {
+        currentReqs.sort((a,b) => (b.noSurat || '').localeCompare(a.noSurat || ''));
+        appStorage.setItem(REQUESTS_DB_KEY, JSON.stringify(currentReqs));
+        refreshRealtimeUI();
+      }
+    }
+
+    // Delta Query for Notifications
+    try {
+      const { data: deltaNotifs } = await supabase
+        .from('notifications')
+        .select('*')
+        .gt('updated_at', lastSync);
+
+      if (Array.isArray(deltaNotifs) && deltaNotifs.length > 0) {
+        const currentNotifs = getSystemNotifications();
+        let notifUpdated = false;
+
+        deltaNotifs.forEach(n => {
+          const parsed = {
+            id: n.id,
+            targetRoles: n.target_roles || n.targetRoles || [],
+            targetArea: n.target_area || n.targetArea || 'ALL',
+            message: n.message,
+            noSurat: n.no_surat || n.noSurat || '',
+            time: n.time || `${getFormattedDateDDMMYYYY()} ${new Date().toLocaleTimeString('id-ID')}`,
+            readBy: n.read_by || n.readBy || []
+          };
+          const idx = currentNotifs.findIndex(x => x.id === parsed.id);
+          if (idx !== -1) {
+            currentNotifs[idx] = { ...currentNotifs[idx], ...parsed };
+          } else {
+            currentNotifs.unshift(parsed);
+          }
+          notifUpdated = true;
+        });
+
+        if (notifUpdated) {
+          appStorage.setItem(NOTIFICATIONS_DB_KEY, JSON.stringify(currentNotifs));
+          try { localStorage.setItem(NOTIFICATIONS_DB_KEY, JSON.stringify(currentNotifs)); } catch(e) {}
+          if (typeof updateNotifBellCounter === 'function') updateNotifBellCounter();
+        }
+      }
+    } catch (e) {}
+
+    // Update last sync timestamp
+    const newSyncTime = new Date().toISOString();
+    appStorage.setItem(SUPABASE_LAST_SYNC_KEY, newSyncTime);
+    try { localStorage.setItem(SUPABASE_LAST_SYNC_KEY, newSyncTime); } catch(e) {}
+  } catch (err) {
+    console.warn('[INCREMENTAL DELTA SYNC NOTICE]:', err);
+  }
+}
+window.syncSupabaseIncremental = syncSupabaseIncremental;
+
+// Full Initial Sync (Used when local cache is empty)
+async function syncAllDataToCache() {
+  if (typeof supabase === 'undefined' || !supabase) return;
+  try {
+    await syncSupabaseRequestsToLocalCache();
+    await syncSupabaseUsersToLocalCache();
+    await syncSupabaseNotifsAndChatToLocalCache();
+    await syncSupabaseStoresToLocalCache();
+    await syncSupabaseLookupToLocalCache();
+    await syncSupabaseThemeToLocalCache();
+
+    const nowIso = new Date().toISOString();
+    appStorage.setItem(SUPABASE_LAST_SYNC_KEY, nowIso);
+    try { localStorage.setItem(SUPABASE_LAST_SYNC_KEY, nowIso); } catch(e) {}
+  } catch (err) {
+    console.warn('[FULL SYNC NOTICE]:', err);
+  }
+}
+window.syncAllDataToCache = syncAllDataToCache;
+
+async function syncSupabaseRequestsToLocalCache() {
+  if (typeof supabase === 'undefined' || !supabase) return;
+  try {
+    let query = supabase.from('permintaan_toko').select('*');
+
+    // Role-based server filter if currentUser is set
+    if (currentUser) {
+      const cat = String(currentUser.category || '').toUpperCase();
+      const userArea = String(currentUser.area || '').toUpperCase();
+
+      if (cat === 'TOKO') {
+        query = query.or(`user_id.eq.${currentUser.id},toko.ilike.%${currentUser.fullName}%`);
+      } else if (cat === 'SERVICE') {
+        if (userArea !== 'ALL' && userArea !== 'TSM') {
+          query = query.eq('area', userArea);
+        }
+      } else if (cat === 'DM') {
+        if (userArea !== 'ALL') {
+          query = query.eq('area', userArea);
+        }
+      }
+    }
+
+    const { data, error } = await query;
+    if (!error && Array.isArray(data)) {
       const delReqs = new Set(
         (JSON.parse(appStorage.getItem(DELETED_REQUESTS_KEY) || '[]') || [])
           .filter(Boolean)
-          .map(v => String(v).trim())
+          .map(v => String(v).trim().toUpperCase())
       );
 
-      const freshReqs = res.requests
+      const freshReqs = data
         .filter(row => {
-          const ns = String(row.noSurat || '').trim();
-          return ns && !ns.startsWith('__SYSTEM_') && !delReqs.has(ns);
+          const ns = String(row.no_surat || row.noSurat || '').trim();
+          return ns && !ns.startsWith('__SYSTEM_') && !delReqs.has(ns.toUpperCase());
         })
-        .map(row => ({
-          noSurat: row.noSurat,
-          tanggal: row.tanggal,
-          toko: row.toko,
-          area: row.area,
-          jenis: row.jenis,
-          catatan: row.catatan || '',
-          items: row.items || [],
-          photos: parsePhotosArray(row.photos),
-          status: row.status || 'PENDING',
-          serviceApprove: !!row.serviceApprove,
-          createdBy: row.createdBy || '',
-          createdAt: row.createdAt || '',
-          userId: row.userId || '',
-          log: row.log || []
-        }));
+        .map(row => formatSupabaseRequestRow(row))
+        .filter(Boolean);
 
       freshReqs.sort((a,b) => (b.noSurat || '').localeCompare(a.noSurat || ''));
       appStorage.setItem(REQUESTS_DB_KEY, JSON.stringify(freshReqs));
-
-      if (typeof currentUser !== 'undefined' && currentUser) {
-        if (typeof loadDashboard === 'function') loadDashboard();
-        if (typeof loadRiwayat === 'function') loadRiwayat();
-        if (typeof loadMasterDbTable === 'function' && document.getElementById('masterDbTableBody')) loadMasterDbTable();
-        if (typeof updateNotifBellCounter === 'function') updateNotifBellCounter();
-      }
+      refreshRealtimeUI();
     }
   } catch (e) {
-    console.warn('[GOOGLE SHEETS REQUESTS SYNC NOTICE]:', e);
+    console.warn('[SUPABASE REQUESTS SYNC NOTICE]:', e);
   }
 }
 
-async function syncGoogleSheetToLocalCache() {
-  const scriptUrl = getGoogleScriptUrl();
-  if (!scriptUrl) return;
-
+async function syncSupabaseUsersToLocalCache() {
+  if (typeof supabase === 'undefined' || !supabase) return;
   try {
-    const res = await callGoogleScript('getAllData', {}, 'GET');
-    if (res && res.status === 'success') {
-      window.isGoogleSheetsOnline = true;
-      updateGlobalConnectionDotStatus();
+    const { data: supaUsers, error } = await supabase.from('users').select('*');
+    if (!error && Array.isArray(supaUsers)) {
+      const delUsers = new Set(
+        (JSON.parse(appStorage.getItem(DELETED_USERS_KEY) || '[]') || [])
+          .filter(Boolean)
+          .map(v => String(v).trim().toUpperCase())
+      );
 
-      // 1. SYNC REQUESTS (STRICT DEDUPLICATION BY NO SURAT)
-      if (Array.isArray(res.requests)) {
-        const delReqs = new Set(
-          (JSON.parse(appStorage.getItem(DELETED_REQUESTS_KEY) || '[]') || [])
-            .filter(Boolean)
-            .map(v => String(v).trim().toUpperCase())
-        );
+      const formatted = supaUsers
+        .map(u => ({
+          id: u.id,
+          username: String(u.username || '').trim(),
+          password: String(u.password || '').trim(),
+          fullName: String(u.full_name || u.fullName || '').trim(),
+          storeCode: String(u.store_code || u.storeCode || '').trim(),
+          phone: String(u.phone || '').trim(),
+          category: String(u.category || 'TOKO').trim().toUpperCase(),
+          area: String(u.area || 'BDG').trim().toUpperCase(),
+          createdAt: u.created_at || (typeof getFormattedDateDDMMYYYY === 'function' ? getFormattedDateDDMMYYYY() : '')
+        }))
+        .filter(u => u.username && !delUsers.has(String(u.id).toUpperCase()) && !delUsers.has(String(u.username).toUpperCase()));
 
-        const reqMap = new Map();
-        res.requests.forEach(r => {
-          if (!r || !r.noSurat || String(r.noSurat).startsWith('__SYSTEM_')) return;
-          const key = String(r.noSurat).trim().toUpperCase();
-          if (!delReqs.has(key)) {
-            reqMap.set(key, {
-              noSurat: String(r.noSurat).trim(),
-              tanggal: r.tanggal || '',
-              toko: r.toko || '',
-              area: r.area || '',
-              jenis: r.jenis || '',
-              catatan: r.catatan || '',
-              items: r.items || [],
-              photos: parsePhotosArray(r.photos),
-              status: r.status || 'PENDING',
-              serviceApprove: !!r.serviceApprove,
-              createdBy: r.createdBy || '',
-              createdAt: r.createdAt || '',
-              userId: r.userId || '',
-              log: r.log || []
-            });
-          }
-        });
-
-        const freshReqs = Array.from(reqMap.values());
-        freshReqs.sort((a,b) => (b.noSurat || '').localeCompare(a.noSurat || ''));
-        appStorage.setItem(REQUESTS_DB_KEY, JSON.stringify(freshReqs));
-        try { localStorage.setItem(REQUESTS_DB_KEY, JSON.stringify(freshReqs)); } catch(e) {}
-      }
-
-      // 2. SYNC USERS (STRICT DEDUPLICATION BY USERNAME & ID)
-      if (Array.isArray(res.users) && res.users.length > 0) {
-        const delUsers = new Set(
-          (JSON.parse(appStorage.getItem(DELETED_USERS_KEY) || '[]') || [])
-            .filter(Boolean)
-            .map(v => String(v).trim().toUpperCase())
-        );
-
-        const userMap = new Map();
-        res.users.forEach(u => {
-          if (!u || !u.username) return;
-          const uName = String(u.username).trim().toUpperCase();
-          const uId = u.id ? String(u.id).trim().toUpperCase() : '';
-          if (!delUsers.has(uName) && (!uId || !delUsers.has(uId))) {
-            userMap.set(uName, {
-              id: u.id || `USR-${Date.now()}`,
-              username: String(u.username).trim(),
-              password: String(u.password || '123').trim(),
-              fullName: String(u.fullName || u.username).trim(),
-              storeCode: String(u.storeCode || '').trim(),
-              phone: String(u.phone || '').trim(),
-              category: String(u.category || 'TOKO').trim().toUpperCase(),
-              area: String(u.area || 'BDG').trim().toUpperCase(),
-              createdAt: u.createdAt || (typeof getFormattedDateDDMMYYYY === 'function' ? getFormattedDateDDMMYYYY() : '')
-            });
-          }
-        });
-
+      if (formatted.length > 0) {
         if (typeof SEED_USERS !== 'undefined' && Array.isArray(SEED_USERS)) {
           SEED_USERS.forEach(su => {
-            if (su && su.username) {
-              const sName = su.username.toUpperCase();
-              if (!userMap.has(sName) && !delUsers.has(sName)) {
-                userMap.set(sName, su);
-              }
+            if (su && su.username && !formatted.some(x => x.username.toUpperCase() === su.username.toUpperCase()) && !delUsers.has(su.username.toUpperCase())) {
+              formatted.unshift(su);
             }
           });
         }
 
-        const formattedUsers = Array.from(userMap.values());
-        if (formattedUsers.length > 0) {
-          appStorage.setItem(USERS_DB_KEY, JSON.stringify(formattedUsers));
-          try { localStorage.setItem(USERS_DB_KEY, JSON.stringify(formattedUsers)); } catch(e) {}
+        appStorage.setItem(USERS_DB_KEY, JSON.stringify(formatted));
+        try { localStorage.setItem(USERS_DB_KEY, JSON.stringify(formatted)); } catch(e) {}
+      }
+    }
+  } catch (err) {
+    console.warn('[SUPABASE USERS SYNC NOTICE]:', err);
+  }
+}
+window.syncSupabaseUsersToLocalCache = syncSupabaseUsersToLocalCache;
+
+async function syncSupabaseNotifsAndChatToLocalCache() {
+  if (typeof supabase === 'undefined' || !supabase) return;
+
+  try {
+    try {
+      const { data: ntfData } = await supabase.from('notifications').select('*');
+      if (ntfData && Array.isArray(ntfData) && ntfData.length > 0) {
+        const parsedNotifs = ntfData.map(n => ({
+          id: n.id,
+          targetRoles: n.target_roles || n.targetRoles || [],
+          targetArea: n.target_area || n.targetArea || 'ALL',
+          message: n.message,
+          noSurat: n.no_surat || n.noSurat || '',
+          time: n.time || '',
+          readBy: n.read_by || n.readBy || []
+        }));
+        if (parsedNotifs.length > 0) {
+          appStorage.setItem(NOTIFICATIONS_DB_KEY, JSON.stringify(parsedNotifs));
+          try { localStorage.setItem(NOTIFICATIONS_DB_KEY, JSON.stringify(parsedNotifs)); } catch(e) {}
         }
       }
+    } catch(e) {}
 
-      // 3. SYNC STORES (STRICT DEDUPLICATION BY STORE NAME + AREA)
-      if (Array.isArray(res.stores) && res.stores.length > 0) {
-        const delStores = new Set(
-          (JSON.parse(appStorage.getItem(DELETED_STORES_KEY) || '[]') || [])
-            .filter(Boolean)
-            .map(v => String(v).trim().toUpperCase())
-        );
+    const { data: chatData } = await supabase.from('chat_messages').select('*');
+    if (Array.isArray(chatData) && chatData.length > 0) {
+      appStorage.setItem(CHAT_DB_KEY, JSON.stringify(chatData));
+      try { localStorage.setItem(CHAT_DB_KEY, JSON.stringify(chatData)); } catch(e) {}
+    }
+  } catch (err) {
+    console.warn('[SUPABASE NOTIF & CHAT SYNC NOTICE]:', err);
+  }
+}
 
-        const storeMap = new Map();
-        res.stores.forEach(s => {
-          if (!s || !s.fullName) return;
-          const name = String(s.fullName).trim();
-          const area = String(s.area || 'BDG').trim().toUpperCase();
-          const key = `${name.toUpperCase()}_${area}`;
-          if (!delStores.has(name.toUpperCase()) && !delStores.has(key)) {
-            storeMap.set(key, {
-              id: s.id || `STK-${Date.now()}`,
-              fullName: name,
-              area: area,
-              storeCode: String(s.storeCode || '').trim(),
-              createdBy: String(s.createdBy || 'ADMIN').trim()
-            });
-          }
+async function syncSupabaseStoresToLocalCache() {
+  if (typeof supabase === 'undefined' || !supabase) return;
+  try {
+    const { data: supaStores, error } = await supabase.from('toko_list').select('*');
+    if (!error && Array.isArray(supaStores)) {
+      const delStores = new Set(
+        (JSON.parse(appStorage.getItem(DELETED_STORES_KEY) || '[]') || [])
+          .filter(Boolean)
+          .map(v => String(v).trim().toUpperCase())
+      );
+      const delUsers = new Set(
+        (JSON.parse(appStorage.getItem(DELETED_USERS_KEY) || '[]') || [])
+          .filter(Boolean)
+          .map(v => String(v).trim().toUpperCase())
+      );
+
+      const formattedStores = supaStores
+        .map(s => ({
+          id: s.id || `STK-${s.store_code || Date.now()}`,
+          fullName: String(s.full_name || s.fullName || '').trim(),
+          area: String(s.area || 'BDG').trim().toUpperCase(),
+          storeCode: String(s.store_code || s.storeCode || '').trim(),
+          createdBy: String(s.created_by || s.createdBy || 'ADMIN').trim()
+        }))
+        .filter(s => {
+          if (!s.fullName) return false;
+          const sId = String(s.id || '').toUpperCase();
+          const sName = s.fullName.toUpperCase();
+          const sKey = `${sName}_${s.area}`;
+          if (delStores.has(sId) || delStores.has(sName) || delStores.has(sKey)) return false;
+          if (delUsers.has(sId) || delUsers.has(sName)) return false;
+          return true;
         });
 
-        const formattedStores = Array.from(storeMap.values());
-        if (formattedStores.length > 0) {
-          appStorage.setItem(STORES_DB_KEY, JSON.stringify(formattedStores));
-          try { localStorage.setItem(STORES_DB_KEY, JSON.stringify(formattedStores)); } catch(e) {}
-        }
-      }
+      appStorage.setItem(STORES_DB_KEY, JSON.stringify(formattedStores));
+      try { localStorage.setItem(STORES_DB_KEY, JSON.stringify(formattedStores)); } catch(e) {}
 
-      // 4. SYNC TTD
-      if (res.ttd && typeof res.ttd === 'object') {
-        const localTtd = JSON.parse(appStorage.getItem(TTD_DB_KEY) || '{}');
-        const mergedTtd = { ...localTtd, ...res.ttd };
-        appStorage.setItem(TTD_DB_KEY, JSON.stringify(mergedTtd));
-        try { localStorage.setItem('APP_USER_TTD_MAP', JSON.stringify(mergedTtd)); } catch(e) {}
-      }
-
-      // 5. SYNC SETTINGS
-      if (res.settings && typeof res.settings === 'object') {
-        if (res.settings.fonteToken) appStorage.setItem(FONTE_TOKEN_KEY, res.settings.fonteToken);
-        if (res.settings.adminReminder !== undefined) appStorage.setItem(ADMIN_REMINDER_KEY, String(res.settings.adminReminder));
-        if (res.settings.adminReminderTime) appStorage.setItem(ADMIN_REMINDER_TIME_KEY, formatToCleanTimeHHmm(res.settings.adminReminderTime));
-        if (res.settings.featurePhotos !== undefined) appStorage.setItem(FEATURE_PHOTOS_KEY, String(res.settings.featurePhotos));
-        if (res.settings.globalTheme) {
-          const cloudTheme = res.settings.globalTheme;
-          appStorage.setItem(GLOBAL_THEME_KEY, cloudTheme);
-          appStorage.setItem(THEME_KEY, cloudTheme);
-          try { localStorage.setItem('APP_SELECTED_THEME', cloudTheme); } catch(e) {}
-          if (typeof updateBodyClasses === 'function') updateBodyClasses(cloudTheme);
-        }
-      }
-
-      // 6. SYNC CHAT
-      if (Array.isArray(res.chat) && res.chat.length > 0) {
-        appStorage.setItem(CHAT_DB_KEY, JSON.stringify(res.chat));
-        try { localStorage.setItem(CHAT_DB_KEY, JSON.stringify(res.chat)); } catch(e) {}
-      }
-
-      if (currentUser) {
-        if (typeof loadDashboard === 'function') loadDashboard();
-        if (typeof loadRiwayat === 'function') loadRiwayat();
-        if (typeof loadMasterDbTable === 'function' && document.getElementById('masterDbTableBody')) loadMasterDbTable();
-        if (typeof loadUsersManagement === 'function' && document.getElementById('userTableBody')) loadUsersManagement();
-        if (typeof loadDaftarTokoModal === 'function' && document.getElementById('daftarTokoTableBody')) loadDaftarTokoModal();
-        if (typeof updateStoreDropdownOptions === 'function') updateStoreDropdownOptions();
+      if (typeof updateStoreDropdownOptions === 'function') {
+        updateStoreDropdownOptions();
       }
     }
   } catch (err) {
-    console.warn('[GOOGLE SHEETS SYNC NOTICE]:', err.message || err);
+    console.warn('[SUPABASE STORES SYNC NOTICE]:', err);
   }
 }
-window.syncGoogleSheetToLocalCache = syncGoogleSheetToLocalCache;
+window.syncSupabaseStoresToLocalCache = syncSupabaseStoresToLocalCache;
 
-async function syncAllDataToCache() {
+async function syncSupabaseLookupToLocalCache() {
+  if (typeof supabase === 'undefined' || !supabase) return;
   try {
-    await syncGoogleSheetToLocalCache();
-
-    if (dbFirestore) {
-      try {
-        const userSnapshot = await dbFirestore.collection('users').get();
-        if (!userSnapshot.empty) {
-          const usrs = [];
-          userSnapshot.forEach(doc => usrs.push(doc.data()));
-          if (usrs.length > 0) {
-            appStorage.setItem(USERS_DB_KEY, JSON.stringify(usrs));
-          }
+    const { data: lookupData } = await supabase.from('lookup').select('*');
+    if (Array.isArray(lookupData)) {
+      lookupData.forEach(item => {
+        if (item.key === 'kodeUnitMap' && item.value) {
+          appStorage.setItem(KODE_UNIT_MAP_KEY, JSON.stringify(item.value));
+          try { localStorage.setItem(KODE_UNIT_MAP_KEY, JSON.stringify(item.value)); } catch(e) {}
         }
-      } catch (err) {
-        console.warn("[FIREBASE SYNC NOTICE]:", err.message);
+      });
+    }
+  } catch (err) {
+    console.warn('[SUPABASE LOOKUP SYNC NOTICE]:', err);
+  }
+}
+window.syncSupabaseLookupToLocalCache = syncSupabaseLookupToLocalCache;
+
+async function syncSupabaseThemeToLocalCache() {
+  if (typeof supabase === 'undefined' || !supabase) return;
+  try {
+    const { data: sysData } = await supabase.from('lookup').select('*').eq('key', 'global_theme').maybeSingle();
+    if (sysData && sysData.value && sysData.value.theme) {
+      const cloudTheme = sysData.value.theme;
+      appStorage.setItem(GLOBAL_THEME_KEY, cloudTheme);
+      appStorage.setItem(THEME_KEY, cloudTheme);
+      try { localStorage.setItem('APP_SELECTED_THEME', cloudTheme); } catch(e) {}
+      if (typeof updateBodyClasses === 'function') {
+        updateBodyClasses(cloudTheme);
       }
     }
   } catch (err) {
-    console.error("Sync error:", err);
+    console.warn('[SUPABASE THEME SYNC NOTICE]:', err);
   }
 }
+window.syncSupabaseThemeToLocalCache = syncSupabaseThemeToLocalCache;
 
 async function pushCentralCloudDB() {
   try {
-    const scriptUrl = getGoogleScriptUrl();
     const requests = getRequestsFromDB();
-    const users = getUsersFromDB();
-    const stores = getStoresFromDB();
-    const ttd = JSON.parse(appStorage.getItem(TTD_DB_KEY) || '{}');
-    const settings = {
-      fonteToken: getFonteToken(),
-      adminReminder: getAdminReminderEnabled(),
-      adminReminderTime: getAdminReminderTime(),
-      featurePhotos: getFeaturePhotosEnabled(),
-      globalTheme: appStorage.getItem(GLOBAL_THEME_KEY) || 'dark-mode'
-    };
+    if (typeof supabase !== 'undefined' && supabase) {
+      try {
+        const supaPayloads = requests.map(r => ({
+          no_surat: r.noSurat,
+          tanggal: r.tanggal,
+          toko: r.toko,
+          area: r.area,
+          jenis: r.jenis,
+          catatan: r.catatan || '',
+          items: r.items || [],
+          photos: r.photos || [],
+          status: r.status,
+          service_approve: !!r.serviceApprove,
+          created_by: r.createdBy || '',
+          created_at: r.createdAt || '',
+          user_id: r.userId || ''
+        }));
+        if (supaPayloads.length > 0) {
+          const supaPayloadsWithId = supaPayloads.map(p => ({
+            id: String(p.no_surat || '').replace(/[\/\.]/g, '_'),
+            ...p
+          }));
+          try {
+            const { error } = await supabase.from('permintaan_toko').upsert(supaPayloadsWithId);
+            if (error) console.warn('[SUPABASE PUSH REQUESTS NOTICE]:', error.message);
+            else console.log('⚡ [SUPABASE PUSH SUCCESS]: All requests synced to Supabase!');
+          } catch(sbErr) {
+            console.warn('[SUPABASE PUSH EXCEPTION]:', sbErr);
+          }
+        }
+
+        // PUSH STORE LIST TO SUPABASE TABLE 'toko_list'
+        if (typeof getStoresFromDB === 'function') {
+          const allStores = getStoresFromDB();
+          if (allStores && allStores.length > 0) {
+            const supaStores = allStores.map(s => ({
+              id: s.id,
+              full_name: s.fullName,
+              area: s.area,
+              store_code: s.storeCode,
+              created_by: s.createdBy || 'ADMIN'
+            }));
+            try {
+              await supabase.from('toko_list').upsert(supaStores);
+            } catch(e) {}
+          }
+        }
+
+        // PUSH TYPE LOOKUP KODE UNIT MAP TO SUPABASE SYSTEM ROW
+        if (typeof getKodeUnitMap === 'function') {
+          const unitMap = getKodeUnitMap();
+          if (unitMap && Object.keys(unitMap).length > 0) {
+
+            const systemUnitRow = {
+              id: '__SYSTEM_KODE_UNIT_MAP__',
+              no_surat: '__SYSTEM_KODE_UNIT_MAP__',
+              tanggal: typeof getFormattedDateDDMMYYYY === 'function' ? getFormattedDateDDMMYYYY() : '',
+              toko: 'SYSTEM',
+              area: 'ALL',
+              jenis: 'SYSTEM',
+              catatan: JSON.stringify(unitMap),
+              items: [],
+              photos: [],
+              status: 'DONE',
+              service_approve: true,
+              created_by: 'SYSTEM',
+              created_at: new Date().toISOString()
+            };
+            try {
+              await supabase.from('permintaan_toko').upsert(systemUnitRow);
+            } catch(e) {}
+          }
+        }
+
+        const ttdMap = JSON.parse(appStorage.getItem(TTD_DB_KEY) || '{}');
+        const systemTtdRow = {
+          id: '__SYSTEM_TTD_MAP__',
+          no_surat: '__SYSTEM_TTD_MAP__',
+          tanggal: typeof getFormattedDateDDMMYYYY === 'function' ? getFormattedDateDDMMYYYY() : '',
+          toko: 'SYSTEM',
+          area: 'ALL',
+          jenis: 'SYSTEM',
+          catatan: JSON.stringify(ttdMap),
+          items: [],
+          photos: [],
+          status: 'DONE',
+          service_approve: true,
+          created_by: 'SYSTEM',
+          created_at: new Date().toISOString()
+        };
+        await supabase.from('permintaan_toko').upsert(systemTtdRow);
+      } catch (sbErr) {
+        console.warn('[SUPABASE PUSH NOTICE]:', sbErr);
+      }
+    }
 
     if (dbFirestore) {
       try {
@@ -1998,12 +2542,8 @@ async function pushCentralCloudDB() {
         console.warn("[FIREBASE REALTIME PUSH NOTICE]:", err.message);
       }
     }
-
-    await syncAllDataToCache();
-  } finally {
-    setTimeout(() => {
-      hideLoading();
-    }, 300);
+  } catch (err) {
+    console.warn('[PUSH CENTRAL CLOUD NOTICE]:', err);
   }
 }
 
@@ -2038,7 +2578,14 @@ function setFeaturePhotosEnabled(enabled) {
     } catch(e) {}
   }
 
-  callGoogleScript('saveSettings', { key: 'featurePhotos', value: valStr }, 'POST').catch(e => console.warn(e));
+  if (typeof supabase !== 'undefined' && supabase) {
+    try {
+      supabase.from('lookup').upsert({ code: 'FEATURE_PHOTOS', type: valStr }).then(({ error }) => {
+        if (error) console.warn('[SUPABASE FEATURE PHOTOS ERROR]:', error.message);
+      });
+    } catch(e) {}
+  }
+
   pushCentralCloudDB();
 }
 
@@ -2402,63 +2949,27 @@ function getUsersFromDB() {
 function saveUsersToDB(users) {
   const normalizedUsers = normalizeUserList(Array.isArray(users) ? users : []);
   appStorage.setItem(USERS_DB_KEY, JSON.stringify(normalizedUsers));
-  try { localStorage.setItem(USERS_DB_KEY, JSON.stringify(normalizedUsers)); } catch(e) {}
+  pushCentralCloudDB();
   if (currentUser) {
-    if (typeof loadDashboard === 'function') loadDashboard();
-    if (typeof loadRiwayat === 'function') loadRiwayat();
-    if (document.getElementById('userTableBody') && typeof loadUsersManagement === 'function') loadUsersManagement();
+    loadDashboard();
+    loadRiwayat();
+    if (document.getElementById('userTableBody')) loadUsersManagement();
   }
 }
-window.saveUsersToDB = saveUsersToDB;
-
-function saveStoresToDB(stores) {
-  const cleanStores = Array.isArray(stores) ? stores : [];
-  appStorage.setItem(STORES_DB_KEY, JSON.stringify(cleanStores));
-  try { localStorage.setItem(STORES_DB_KEY, JSON.stringify(cleanStores)); } catch(e) {}
-  if (typeof updateStoreDropdownOptions === 'function') updateStoreDropdownOptions();
-  if (document.getElementById('daftarTokoTableBody') && typeof loadDaftarTokoModal === 'function') loadDaftarTokoModal();
-}
-window.saveStoresToDB = saveStoresToDB;
 
 function getRequestsFromDB() {
-  let reqs = [];
-  try {
-    let raw = appStorage.getItem(REQUESTS_DB_KEY);
-    if (!raw && typeof localStorage !== 'undefined') {
-      raw = localStorage.getItem(REQUESTS_DB_KEY);
-    }
-    if (raw) reqs = JSON.parse(raw);
-  } catch (e) {
-    reqs = [];
-  }
-  if (!Array.isArray(reqs)) reqs = [];
-  const map = new Map();
-  reqs.forEach(r => {
-    if (r && r.noSurat && !String(r.noSurat).startsWith('__SYSTEM_')) {
-      map.set(String(r.noSurat).trim().toUpperCase(), r);
-    }
-  });
-  return Array.from(map.values());
+  const reqs = JSON.parse(appStorage.getItem(REQUESTS_DB_KEY) || '[]');
+  return reqs.filter(r => r && r.noSurat && !String(r.noSurat).startsWith('__SYSTEM_'));
 }
-window.getRequestsFromDB = getRequestsFromDB;
 
 function saveRequestsToDB(requests) {
-  const cleanReqs = Array.isArray(requests) ? requests : [];
-  const map = new Map();
-  cleanReqs.forEach(r => {
-    if (r && r.noSurat) {
-      map.set(String(r.noSurat).trim().toUpperCase(), r);
-    }
-  });
-  const uniqueReqs = Array.from(map.values());
-  appStorage.setItem(REQUESTS_DB_KEY, JSON.stringify(uniqueReqs));
-  try { localStorage.setItem(REQUESTS_DB_KEY, JSON.stringify(uniqueReqs)); } catch(e) {}
+  appStorage.setItem(REQUESTS_DB_KEY, JSON.stringify(requests));
+  pushCentralCloudDB();
   if (currentUser) {
-    if (typeof loadDashboard === 'function') loadDashboard();
-    if (typeof loadRiwayat === 'function') loadRiwayat();
+    loadDashboard();
+    loadRiwayat();
   }
 }
-window.saveRequestsToDB = saveRequestsToDB;
 
 function getFonteToken() {
   return appStorage.getItem(FONTE_TOKEN_KEY) || '';
@@ -2478,951 +2989,6 @@ function loadFonteToken() {
     input.value = getFonteToken();
   }
 }
-
-function loadGoogleScriptUrlInput() {
-  const input = document.getElementById('googleScriptUrlInput');
-  if (input) {
-    input.value = getGoogleScriptUrl();
-  }
-}
-window.loadGoogleScriptUrlInput = loadGoogleScriptUrlInput;
-
-function simpanGoogleScriptUrl() {
-  const input = document.getElementById('googleScriptUrlInput');
-  const url = input ? input.value.trim() : '';
-  saveGoogleScriptUrl(url);
-  if (url) {
-    showNotif('URL GOOGLE APPS SCRIPT BERHASIL DISIMPAN!', 'success');
-    tesKoneksiGoogleSheets(false);
-  } else {
-    showNotif('URL GOOGLE APPS SCRIPT DIKOSONGKAN!', 'info');
-  }
-}
-window.simpanGoogleScriptUrl = simpanGoogleScriptUrl;
-
-async function tesKoneksiGoogleSheets(showSuccessNotif = true) {
-  const url = getGoogleScriptUrl();
-  if (!url) {
-    showNotif('URL GOOGLE APPS SCRIPT BELUM DIISI! SILAKAN MASUKKAN URL TERLEBIH DAHULU.', 'warning');
-    return false;
-  }
-
-  showLoading('MENGHUBUNGI GOOGLE SPREADSHEET...');
-  try {
-    const res = await callGoogleScript('ping', {}, 'GET');
-    hideLoading();
-    if (res && res.status === 'success') {
-      window.isGoogleSheetsOnline = true;
-      updateGlobalConnectionDotStatus();
-      if (showSuccessNotif) {
-        showNotif('KONEKSI GOOGLE SPREADSHEET BERHASIL & ONLINE TERHUBUNG! 🚀', 'success');
-      }
-      return true;
-    } else {
-      window.isGoogleSheetsOnline = false;
-      updateGlobalConnectionDotStatus();
-      showNotif('GAGAL TERHUBUNG KE GOOGLE SPREADSHEET: ' + (res?.message || 'Periksa URL dan pastikan deployment diatur untuk Anyone/Siapa saja'), 'error');
-      return false;
-    }
-  } catch (err) {
-    hideLoading();
-    window.isGoogleSheetsOnline = false;
-    updateGlobalConnectionDotStatus();
-    showNotif('TERJADI KESALAHAN KONEKSI: ' + err.message, 'error');
-    return false;
-  }
-}
-window.tesKoneksiGoogleSheets = tesKoneksiGoogleSheets;
-
-async function sinkronkanSemuaKeGoogleSheets() {
-  const url = getGoogleScriptUrl();
-  if (!url) {
-    showNotif('URL GOOGLE APPS SCRIPT BELUM DIISI! SILAKAN MASUKKAN URL TERLEBIH DAHULU.', 'warning');
-    return;
-  }
-
-  showLoading('MENGUNGGAH SEMUA DATA KE GOOGLE SPREADSHEET...', 'Sedang memproses pengiriman data');
-  try {
-    const requests = getRequestsFromDB();
-    const users = getUsersFromDB();
-    const stores = getStoresFromDB();
-    const ttd = JSON.parse(appStorage.getItem(TTD_DB_KEY) || '{}');
-    const settings = {
-      fonteToken: getFonteToken(),
-      adminReminder: getAdminReminderEnabled(),
-      adminReminderTime: getAdminReminderTime(),
-      featurePhotos: getFeaturePhotosEnabled(),
-      globalTheme: appStorage.getItem(GLOBAL_THEME_KEY) || 'dark-mode'
-    };
-
-    const res = await callGoogleScript('syncAll', { requests, users, stores, ttd, settings }, 'POST');
-    
-    // SETELAH PROSES PENGIRIMAN SELESAI: BERIKAN JEDA 3 DETIK DENGAN ANIMASI LOADING MUTER
-    for (let sec = 3; sec >= 1; sec--) {
-      showLoading(`MENGAMBIL DATA TERBARU (${sec}s)...`, 'Sinkronisasi data spreadsheet ke sistem');
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-    
-    showLoading('MEMPERBARUI DATA...', 'Memuat data terbaru');
-    await syncGoogleSheetToLocalCache();
-    hideLoading();
-
-    if (res && res.status === 'success') {
-      showNotif(`BERHASIL MENSINKRONKAN & MEMPERBARUI ${requests.length} PERMINTAAN, ${users.length} USER & ${stores.length} TOKO! 🎉`, 'success');
-    } else {
-      showNotif('SINKRONISASI SELESAI: ' + (res?.message || 'Data telah diperbarui'), 'info');
-    }
-  } catch (err) {
-    hideLoading();
-    showNotif('GAGAL SINKRONISASI: ' + err.message, 'error');
-  }
-}
-window.sinkronkanSemuaKeGoogleSheets = sinkronkanSemuaKeGoogleSheets;
-
-async function tarikSemuaDariGoogleSheets() {
-  const url = getGoogleScriptUrl();
-  if (!url) {
-    showNotif('URL GOOGLE APPS SCRIPT BELUM DIISI! SILAKAN MASUKKAN URL TERLEBIH DAHULU.', 'warning');
-    return;
-  }
-
-  try {
-    for (let sec = 5; sec >= 1; sec--) {
-      showLoading(`MENGAMBIL DATA TERBARU DARI GOOGLE SPREADSHEET (${sec}s)...`, 'Sinkronisasi sel spreadsheet ke sistem');
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-    showLoading('MEMUAT DATA TERBARU...', 'Memperbarui tabel');
-    await syncGoogleSheetToLocalCache();
-    hideLoading();
-    showNotif('DATA BERHASIL DIPERBARUI DARI GOOGLE SPREADSHEET! 📥', 'success');
-  } catch (err) {
-    hideLoading();
-    showNotif('GAGAL MENARIK DATA: ' + err.message, 'error');
-  }
-}
-window.tarikSemuaDariGoogleSheets = tarikSemuaDariGoogleSheets;
-
-const GOOGLE_APPS_SCRIPT_SAMPLE_CODE = `/**
- * ==============================================================================================
- * GOOGLE APPS SCRIPT BACKEND DATABASE UNTUK APLIKASI PERMINTAAN TOKO
- * ==============================================================================================
- * 
- * PANDUAN PEMASANGAN:
- * 1. Buka Google Spreadsheet baru di browser: https://sheets.new
- * 2. Klik menu "Ekstensi" (Extensions) -> "Apps Script".
- * 3. Hapus semua kode default di file Code.gs, lalu SALIN & TEMPEL seluruh kode ini.
- * 4. Klik ikon "Simpan" (Save / Ctrl+S).
- * 5. Klik tombol biru "Terapkan" (Deploy) -> "Penerapan baru" (New deployment).
- * 6. Pilih jenis: "Aplikasi Web" (Web App).
- * 7. Konfigurasi:
- *    - Deskripsi: Backend Database Permintaan Toko
- *    - Jalankan sebagai: Saya (Email Anda)
- *    - Siapa yang memiliki akses: Siapa saja (Anyone / Termasuk Anonim)  <-- WAJIB
- * 8. Klik "Terapkan" (Deploy) -> Berikan izin akses (Authorize access).
- * 9. Salin URL Aplikasi Web (akhiran /exec).
- * 10. Buka Aplikasi Toko -> Masuk sebagai ADMIN -> Tempelkan URL di Pengaturan Google Sheets.
- * ==============================================================================================
- */
-
-const SHEET_NAMES = {
-  REQUESTS: 'PERMINTAAN',
-  USERS: 'USERS',
-  STORES: 'TOKO',
-  TTD: 'TTD',
-  SETTINGS: 'SETTINGS',
-  CHAT: 'CHAT'
-};
-
-function getOrCreateSheet(sheetName) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(sheetName);
-  if (!sheet) {
-    sheet = ss.insertSheet(sheetName);
-    initSheetHeader(sheet, sheetName);
-  }
-  return sheet;
-}
-
-function initSheetHeader(sheet, sheetName) {
-  let headers = [];
-  if (sheetName === SHEET_NAMES.REQUESTS) {
-    headers = ['NO SURAT', 'TANGGAL', 'TOKO', 'AREA', 'JENIS', 'STATUS', 'SERVICE APPROVE', 'PEMOHON', 'USER ID', 'ITEMS JSON', 'PHOTOS JSON', 'CATATAN', 'LOG JSON', 'CREATED AT'];
-  } else if (sheetName === SHEET_NAMES.USERS) {
-    headers = ['ID', 'USERNAME', 'PASSWORD', 'NAMA LENGKAP', 'KODE TOKO', 'NO TELEPON', 'KATEGORI', 'AREA', 'CREATED AT'];
-  } else if (sheetName === SHEET_NAMES.STORES) {
-    headers = ['ID', 'NAMA TOKO', 'AREA', 'KODE TOKO', 'DIBUAT OLEH'];
-  } else if (sheetName === SHEET_NAMES.TTD) {
-    headers = ['USER ID', 'USERNAME', 'TTD DATA URL', 'UPDATED AT'];
-  } else if (sheetName === SHEET_NAMES.SETTINGS) {
-    headers = ['KEY', 'VALUE', 'UPDATED AT'];
-  } else if (sheetName === SHEET_NAMES.CHAT) {
-    headers = ['ID', 'ROOM ID', 'SENDER USERNAME', 'SENDER NAME', 'MESSAGE', 'TIMESTAMP', 'CREATED AT'];
-  }
-
-  if (headers.length > 0) {
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#1e293b').setFontColor('#ffffff');
-    sheet.setFrozenRows(1);
-  }
-}
-
-function doGet(e) {
-  try {
-    const action = (e && e.parameter && e.parameter.action) ? e.parameter.action : 'getAllData';
-
-    if (action === 'ping') {
-      return createJsonResponse({ status: 'success', message: 'GOOGLE APPS SCRIPT ONLINE TERHUBUNG!', timestamp: new Date().toISOString() });
-    }
-
-    if (action === 'getAllData') {
-      return createJsonResponse({
-        status: 'success',
-        requests: getRequestsData(),
-        users: getUsersData(),
-        stores: getStoresData(),
-        ttd: getTTDData(),
-        settings: getSettingsData(),
-        chat: getChatData(),
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    if (action === 'getRequests') return createJsonResponse({ status: 'success', requests: getRequestsData() });
-    if (action === 'getUsers') return createJsonResponse({ status: 'success', users: getUsersData() });
-    if (action === 'getStores') return createJsonResponse({ status: 'success', stores: getStoresData() });
-
-    return createJsonResponse({ status: 'error', message: 'Action doGet tidak dikenal: ' + action });
-  } catch (err) {
-    return createJsonResponse({ status: 'error', message: err.toString() });
-  }
-}
-
-function doPost(e) {
-  const lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(25000);
-    let body = {};
-    if (e && e.postData && e.postData.contents) {
-      try { body = JSON.parse(e.postData.contents); } catch (parseErr) { body = e.parameter || {}; }
-    } else if (e && e.parameter) {
-      body = e.parameter;
-    }
-
-    const action = body.action || 'syncAll';
-
-    if (action === 'syncAll') {
-      if (Array.isArray(body.requests)) saveBulkRequests(body.requests);
-      if (Array.isArray(body.users)) saveBulkUsers(body.users);
-      if (Array.isArray(body.stores)) saveBulkStores(body.stores);
-      if (body.ttd) saveBulkTTD(body.ttd);
-      if (body.settings) saveBulkSettings(body.settings);
-      return createJsonResponse({ status: 'success', message: 'Semua data berhasil disinkronkan ke Google Spreadsheet!' });
-    }
-
-    if (action === 'saveRequest') {
-      saveSingleRequest(body.data);
-      return createJsonResponse({ status: 'success', message: 'Permintaan berhasil disimpan ke Sheet!' });
-    }
-
-    if (action === 'syncRequests') {
-      saveBulkRequests(body.requests || []);
-      return createJsonResponse({ status: 'success', message: 'Daftar permintaan berhasil disinkronkan ke Sheet!' });
-    }
-
-    if (action === 'deleteRequest') {
-      deleteSingleRequest(body.noSurat);
-      return createJsonResponse({ status: 'success', message: 'Permintaan berhasil dihapus dari Sheet!' });
-    }
-
-    if (action === 'deleteBulkRequests') {
-      deleteBulkRequests(body.noSuratList || []);
-      return createJsonResponse({ status: 'success', message: 'Batch permintaan berhasil dihapus dari Sheet!' });
-    }
-
-    if (action === 'saveUser') {
-      saveSingleUser(body.data);
-      return createJsonResponse({ status: 'success', message: 'Data user berhasil disimpan ke Sheet!' });
-    }
-
-    if (action === 'syncUsers') {
-      saveBulkUsers(body.users || []);
-      return createJsonResponse({ status: 'success', message: 'Daftar user berhasil disinkronkan ke Sheet!' });
-    }
-
-    if (action === 'deleteUser') {
-      deleteSingleUser(body.userId, body.username);
-      return createJsonResponse({ status: 'success', message: 'User berhasil dihapus dari Sheet!' });
-    }
-
-    if (action === 'deleteBulkUsers') {
-      deleteBulkUsers(body.userIds || [], body.usernames || []);
-      return createJsonResponse({ status: 'success', message: 'Batch user berhasil dihapus dari Sheet!' });
-    }
-
-    if (action === 'saveStore') {
-      saveSingleStore(body.data);
-      return createJsonResponse({ status: 'success', message: 'Data toko berhasil disimpan ke Sheet!' });
-    }
-
-    if (action === 'syncStores') {
-      saveBulkStores(body.stores || []);
-      return createJsonResponse({ status: 'success', message: 'Daftar toko berhasil disinkronkan ke Sheet!' });
-    }
-
-    if (action === 'deleteStore') {
-      deleteSingleStore(body.storeId, body.storeName);
-      return createJsonResponse({ status: 'success', message: 'Toko berhasil dihapus dari Sheet!' });
-    }
-
-    if (action === 'deleteBulkStores') {
-      deleteBulkStores(body.storeIds || [], body.storeNames || []);
-      return createJsonResponse({ status: 'success', message: 'Batch toko berhasil dihapus dari Sheet!' });
-    }
-
-    if (action === 'saveTTD') {
-      saveSingleTTD(body.userId, body.username, body.ttdData);
-      return createJsonResponse({ status: 'success', message: 'TTD berhasil disimpan ke Sheet!' });
-    }
-
-    if (action === 'saveSettings') {
-      saveSingleSetting(body.key, body.value);
-      return createJsonResponse({ status: 'success', message: 'Pengaturan berhasil disimpan ke Sheet!' });
-    }
-
-    if (action === 'saveChatMessage') {
-      saveSingleChatMessage(body.data);
-      return createJsonResponse({ status: 'success', message: 'Pesan chat berhasil disimpan ke Sheet!' });
-    }
-
-    if (action === 'deleteChatRoom') {
-      deleteSingleChatRoom(body.room);
-      return createJsonResponse({ status: 'success', message: 'Room chat berhasil dihapus dari Sheet!' });
-    }
-
-    return createJsonResponse({ status: 'error', message: 'Action doPost tidak dikenal: ' + action });
-  } catch (err) {
-    return createJsonResponse({ status: 'error', message: err.toString() });
-  } finally {
-    try { lock.releaseLock(); } catch(e) {}
-  }
-}
-
-function createJsonResponse(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-// REQUESTS HANDLERS
-function getRequestsData() {
-  const sheet = getOrCreateSheet(SHEET_NAMES.REQUESTS);
-  const rows = sheet.getDataRange().getValues();
-  if (rows.length <= 1) return [];
-  const requests = [];
-  for (let i = 1; i < rows.length; i++) {
-    const r = rows[i];
-    if (!r[0]) continue;
-    let items = [], photos = [], log = [];
-    try { items = JSON.parse(r[9] || '[]'); } catch(e) {}
-    try { photos = JSON.parse(r[10] || '[]'); } catch(e) {}
-    try { log = JSON.parse(r[12] || '[]'); } catch(e) {}
-    requests.push({
-      noSurat: String(r[0]),
-      tanggal: String(r[1]),
-      toko: String(r[2]),
-      area: String(r[3]),
-      jenis: String(r[4]),
-      status: String(r[5] || 'PENDING'),
-      serviceApprove: r[6] === true || String(r[6]).toUpperCase() === 'TRUE',
-      createdBy: String(r[7]),
-      userId: String(r[8]),
-      items: items,
-      photos: photos,
-      catatan: String(r[11] || ''),
-      log: log,
-      createdAt: String(r[13] || '')
-    });
-  }
-  return requests;
-}
-
-function saveSingleRequest(req) {
-  if (!req || !req.noSurat) return;
-  const sheet = getOrCreateSheet(SHEET_NAMES.REQUESTS);
-  const data = sheet.getDataRange().getValues();
-  const target = String(req.noSurat).trim().toUpperCase();
-  const rowValues = [
-    req.noSurat, req.tanggal || '', req.toko || '', req.area || '', req.jenis || '',
-    req.status || 'PENDING', req.serviceApprove ? 'TRUE' : 'FALSE', req.createdBy || '',
-    req.userId || '', JSON.stringify(req.items || []), JSON.stringify(req.photos || []),
-    req.catatan || '', JSON.stringify(req.log || []), req.createdAt || new Date().toISOString()
-  ];
-  let foundRow = -1;
-  const duplicateRows = [];
-  let lastFilledRow = 1;
-
-  for (let i = 1; i < data.length; i++) {
-    const colVal = String(data[i][0] || '').trim().toUpperCase();
-    if (colVal) {
-      lastFilledRow = i + 1;
-      if (colVal === target) {
-        if (foundRow === -1) {
-          foundRow = i + 1;
-        } else {
-          duplicateRows.push(i + 1);
-        }
-      }
-    }
-  }
-
-  if (foundRow !== -1) {
-    sheet.getRange(foundRow, 1, 1, rowValues.length).setValues([rowValues]);
-    for (let d = duplicateRows.length - 1; d >= 0; d--) {
-      sheet.deleteRow(duplicateRows[d]);
-    }
-  } else {
-    const targetRow = lastFilledRow + 1;
-    sheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
-  }
-  SpreadsheetApp.flush();
-}
-
-function saveBulkRequests(reqList) {
-  if (!Array.isArray(reqList) || reqList.length === 0) return;
-  const sheet = getOrCreateSheet(SHEET_NAMES.REQUESTS);
-  const existingData = sheet.getDataRange().getValues();
-  const existingMap = new Map();
-  const duplicateRows = [];
-
-  for (let i = 1; i < existingData.length; i++) {
-    const ns = String(existingData[i][0] || '').trim().toUpperCase();
-    if (ns) {
-      if (!existingMap.has(ns)) {
-        existingMap.set(ns, i + 1);
-      } else {
-        duplicateRows.push(i + 1);
-      }
-    }
-  }
-
-  for (let d = duplicateRows.length - 1; d >= 0; d--) {
-    sheet.deleteRow(duplicateRows[d]);
-  }
-
-  const refreshedData = sheet.getDataRange().getValues();
-  const refreshedMap = new Map();
-  let currentLastRow = 1;
-
-  for (let i = 1; i < refreshedData.length; i++) {
-    const ns = String(refreshedData[i][0] || '').trim().toUpperCase();
-    if (ns) {
-      currentLastRow = i + 1;
-      refreshedMap.set(ns, i + 1);
-    }
-  }
-
-  const processedKeys = new Set();
-
-  reqList.forEach(req => {
-    if (!req || !req.noSurat) return;
-    const targetNoSurat = String(req.noSurat).trim().toUpperCase();
-    if (processedKeys.has(targetNoSurat)) return;
-    processedKeys.add(targetNoSurat);
-
-    const rowValues = [
-      req.noSurat, req.tanggal || '', req.toko || '', req.area || '', req.jenis || '',
-      req.status || 'PENDING', req.serviceApprove ? 'TRUE' : 'FALSE', req.createdBy || '',
-      req.userId || '', JSON.stringify(req.items || []), JSON.stringify(req.photos || []),
-      req.catatan || '', JSON.stringify(req.log || []), req.createdAt || new Date().toISOString()
-    ];
-
-    if (refreshedMap.has(targetNoSurat)) {
-      const rowIdx = refreshedMap.get(targetNoSurat);
-      sheet.getRange(rowIdx, 1, 1, rowValues.length).setValues([rowValues]);
-    } else {
-      currentLastRow++;
-      sheet.getRange(currentLastRow, 1, 1, rowValues.length).setValues([rowValues]);
-      refreshedMap.set(targetNoSurat, currentLastRow);
-    }
-  });
-
-  SpreadsheetApp.flush();
-}
-
-function deleteSingleRequest(noSurat) {
-  if (!noSurat) return;
-  const sheet = getOrCreateSheet(SHEET_NAMES.REQUESTS);
-  const data = sheet.getDataRange().getValues();
-  const target = String(noSurat).trim().toUpperCase();
-  for (let i = data.length - 1; i >= 1; i--) {
-    if (String(data[i][0] || '').trim().toUpperCase() === target) sheet.deleteRow(i + 1);
-  }
-}
-
-function deleteBulkRequests(noSuratList) {
-  if (!Array.isArray(noSuratList) || noSuratList.length === 0) return;
-  const sheet = getOrCreateSheet(SHEET_NAMES.REQUESTS);
-  const data = sheet.getDataRange().getValues();
-  const targets = new Set(noSuratList.map(n => String(n).trim().toUpperCase()));
-  for (let i = data.length - 1; i >= 1; i--) {
-    if (targets.has(String(data[i][0] || '').trim().toUpperCase())) sheet.deleteRow(i + 1);
-  }
-}
-
-// USERS HANDLERS
-function getUsersData() {
-  const sheet = getOrCreateSheet(SHEET_NAMES.USERS);
-  const rows = sheet.getDataRange().getValues();
-  if (rows.length <= 1) return [];
-  const users = [];
-  for (let i = 1; i < rows.length; i++) {
-    const r = rows[i];
-    if (!r[1]) continue;
-    users.push({
-      id: String(r[0] || ('USR-' + Date.now() + '-' + i)),
-      username: String(r[1]),
-      password: String(r[2] || '123'),
-      fullName: String(r[3] || r[1]),
-      storeCode: String(r[4] || ''),
-      phone: String(r[5] || ''),
-      category: String(r[6] || 'TOKO').toUpperCase(),
-      area: String(r[7] || 'BDG').toUpperCase(),
-      createdAt: String(r[8] || '')
-    });
-  }
-  return users;
-}
-
-function saveSingleUser(user) {
-  if (!user || !user.username) return;
-  const sheet = getOrCreateSheet(SHEET_NAMES.USERS);
-  const data = sheet.getDataRange().getValues();
-  const targetUsername = String(user.username).trim().toUpperCase();
-  const targetId = user.id ? String(user.id).trim().toUpperCase() : '';
-  const rowValues = [
-    user.id || ('USR-' + Date.now()), user.username, user.password || '123',
-    user.fullName || user.username, user.storeCode || '', user.phone || '',
-    user.category || 'TOKO', user.area || 'BDG', user.createdAt || new Date().toISOString()
-  ];
-  let foundRow = -1;
-  const duplicateRows = [];
-  let lastFilledRow = 1;
-
-  for (let i = 1; i < data.length; i++) {
-    const rowId = String(data[i][0] || '').trim().toUpperCase();
-    const rowUser = String(data[i][1] || '').trim().toUpperCase();
-    if (rowUser || rowId) {
-      lastFilledRow = i + 1;
-      if (rowUser === targetUsername || (targetId && rowId === targetId)) {
-        if (foundRow === -1) {
-          foundRow = i + 1;
-        } else {
-          duplicateRows.push(i + 1);
-        }
-      }
-    }
-  }
-
-  if (foundRow !== -1) {
-    sheet.getRange(foundRow, 1, 1, rowValues.length).setValues([rowValues]);
-    for (let d = duplicateRows.length - 1; d >= 0; d--) {
-      sheet.deleteRow(duplicateRows[d]);
-    }
-  } else {
-    const targetRow = lastFilledRow + 1;
-    sheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
-  }
-  SpreadsheetApp.flush();
-}
-
-function saveBulkUsers(userList) {
-  if (!Array.isArray(userList) || userList.length === 0) return;
-  const sheet = getOrCreateSheet(SHEET_NAMES.USERS);
-  const existingData = sheet.getDataRange().getValues();
-  const existingMap = new Map();
-  const duplicateRows = [];
-
-  for (let i = 1; i < existingData.length; i++) {
-    const uName = String(existingData[i][1] || '').trim().toUpperCase();
-    if (uName) {
-      if (!existingMap.has(uName)) {
-        existingMap.set(uName, i + 1);
-      } else {
-        duplicateRows.push(i + 1);
-      }
-    }
-  }
-
-  for (let d = duplicateRows.length - 1; d >= 0; d--) {
-    sheet.deleteRow(duplicateRows[d]);
-  }
-
-  const refreshedData = sheet.getDataRange().getValues();
-  const refreshedMap = new Map();
-  let currentLastRow = 1;
-
-  for (let i = 1; i < refreshedData.length; i++) {
-    const uName = String(refreshedData[i][1] || '').trim().toUpperCase();
-    if (uName) {
-      currentLastRow = i + 1;
-      refreshedMap.set(uName, i + 1);
-    }
-  }
-
-  const processedKeys = new Set();
-
-  userList.forEach(u => {
-    if (!u || !u.username) return;
-    const targetUser = String(u.username).trim().toUpperCase();
-    if (processedKeys.has(targetUser)) return;
-    processedKeys.add(targetUser);
-
-    const rowValues = [
-      u.id || ('USR-' + Date.now()), u.username, u.password || '123',
-      u.fullName || u.username, u.storeCode || '', u.phone || '',
-      u.category || 'TOKO', u.area || 'BDG', u.createdAt || new Date().toISOString()
-    ];
-
-    if (refreshedMap.has(targetUser)) {
-      const rowIdx = refreshedMap.get(targetUser);
-      sheet.getRange(rowIdx, 1, 1, rowValues.length).setValues([rowValues]);
-    } else {
-      currentLastRow++;
-      sheet.getRange(currentLastRow, 1, 1, rowValues.length).setValues([rowValues]);
-      refreshedMap.set(targetUser, currentLastRow);
-    }
-  });
-
-  SpreadsheetApp.flush();
-}
-
-function deleteSingleUser(userId, username) {
-  const sheet = getOrCreateSheet(SHEET_NAMES.USERS);
-  const data = sheet.getDataRange().getValues();
-  const targetId = userId ? String(userId).trim().toUpperCase() : '';
-  const targetUser = username ? String(username).trim().toUpperCase() : '';
-  for (let i = data.length - 1; i >= 1; i--) {
-    const rowId = String(data[i][0] || '').trim().toUpperCase();
-    const rowUser = String(data[i][1] || '').trim().toUpperCase();
-    if ((targetId && rowId === targetId) || (targetUser && rowUser === targetUser)) sheet.deleteRow(i + 1);
-  }
-}
-
-function deleteBulkUsers(userIds, usernames) {
-  const sheet = getOrCreateSheet(SHEET_NAMES.USERS);
-  const data = sheet.getDataRange().getValues();
-  const targetIdSet = new Set((userIds || []).map(id => String(id).trim().toUpperCase()));
-  const targetUserSet = new Set((usernames || []).map(u => String(u).trim().toUpperCase()));
-  for (let i = data.length - 1; i >= 1; i--) {
-    const rowId = String(data[i][0] || '').trim().toUpperCase();
-    const rowUser = String(data[i][1] || '').trim().toUpperCase();
-    if (targetIdSet.has(rowId) || targetUserSet.has(rowUser)) sheet.deleteRow(i + 1);
-  }
-}
-
-// STORES HANDLERS
-function getStoresData() {
-  const sheet = getOrCreateSheet(SHEET_NAMES.STORES);
-  const rows = sheet.getDataRange().getValues();
-  if (rows.length <= 1) return [];
-  const stores = [];
-  for (let i = 1; i < rows.length; i++) {
-    const r = rows[i];
-    if (!r[1]) continue;
-    stores.push({
-      id: String(r[0] || ('STK-' + Date.now() + '-' + i)),
-      fullName: String(r[1]),
-      area: String(r[2] || 'BDG').toUpperCase(),
-      storeCode: String(r[3] || ''),
-      createdBy: String(r[4] || 'ADMIN')
-    });
-  }
-  return stores;
-}
-
-function saveSingleStore(store) {
-  if (!store || !store.fullName) return;
-  const sheet = getOrCreateSheet(SHEET_NAMES.STORES);
-  const data = sheet.getDataRange().getValues();
-  const targetName = String(store.fullName).trim().toUpperCase();
-  const rowValues = [
-    store.id || ('STK-' + Date.now()), store.fullName, store.area || 'BDG',
-    store.storeCode || '', store.createdBy || 'ADMIN'
-  ];
-  let foundRow = -1;
-  const duplicateRows = [];
-  let lastFilledRow = 1;
-
-  for (let i = 1; i < data.length; i++) {
-    const rowName = String(data[i][1] || '').trim().toUpperCase();
-    if (rowName) {
-      lastFilledRow = i + 1;
-      if (rowName === targetName) {
-        if (foundRow === -1) {
-          foundRow = i + 1;
-        } else {
-          duplicateRows.push(i + 1);
-        }
-      }
-    }
-  }
-
-  if (foundRow !== -1) {
-    sheet.getRange(foundRow, 1, 1, rowValues.length).setValues([rowValues]);
-    for (let d = duplicateRows.length - 1; d >= 0; d--) {
-      sheet.deleteRow(duplicateRows[d]);
-    }
-  } else {
-    const targetRow = lastFilledRow + 1;
-    sheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
-  }
-  SpreadsheetApp.flush();
-}
-
-function saveBulkStores(storeList) {
-  if (!Array.isArray(storeList) || storeList.length === 0) return;
-  const sheet = getOrCreateSheet(SHEET_NAMES.STORES);
-  const existingData = sheet.getDataRange().getValues();
-  const existingMap = new Map();
-  const duplicateRows = [];
-
-  for (let i = 1; i < existingData.length; i++) {
-    const name = String(existingData[i][1] || '').trim().toUpperCase();
-    const area = String(existingData[i][2] || 'BDG').trim().toUpperCase();
-    if (name) {
-      const key = name + '_' + area;
-      if (!existingMap.has(key)) {
-        existingMap.set(key, i + 1);
-      } else {
-        duplicateRows.push(i + 1);
-      }
-    }
-  }
-
-  for (let d = duplicateRows.length - 1; d >= 0; d--) {
-    sheet.deleteRow(duplicateRows[d]);
-  }
-
-  const refreshedData = sheet.getDataRange().getValues();
-  const refreshedMap = new Map();
-  let currentLastRow = 1;
-
-  for (let i = 1; i < refreshedData.length; i++) {
-    const name = String(refreshedData[i][1] || '').trim().toUpperCase();
-    const area = String(refreshedData[i][2] || 'BDG').trim().toUpperCase();
-    if (name) {
-      currentLastRow = i + 1;
-      refreshedMap.set(name + '_' + area, i + 1);
-    }
-  }
-
-  const processedKeys = new Set();
-
-  storeList.forEach(s => {
-    if (!s || !s.fullName) return;
-    const key = String(s.fullName).trim().toUpperCase() + '_' + String(s.area || 'BDG').trim().toUpperCase();
-    if (processedKeys.has(key)) return;
-    processedKeys.add(key);
-
-    const rowValues = [
-      s.id || ('STK-' + Date.now()), s.fullName, s.area || 'BDG',
-      s.storeCode || '', s.createdBy || 'ADMIN'
-    ];
-
-    if (refreshedMap.has(key)) {
-      const rowIdx = refreshedMap.get(key);
-      sheet.getRange(rowIdx, 1, 1, rowValues.length).setValues([rowValues]);
-    } else {
-      currentLastRow++;
-      sheet.getRange(currentLastRow, 1, 1, rowValues.length).setValues([rowValues]);
-      refreshedMap.set(key, currentLastRow);
-    }
-  });
-
-  SpreadsheetApp.flush();
-}
-
-function deleteSingleStore(storeId, storeName) {
-  const sheet = getOrCreateSheet(SHEET_NAMES.STORES);
-  const data = sheet.getDataRange().getValues();
-  const targetId = storeId ? String(storeId).trim().toUpperCase() : '';
-  const targetName = storeName ? String(storeName).trim().toUpperCase() : '';
-  for (let i = data.length - 1; i >= 1; i--) {
-    const rowId = String(data[i][0]).trim().toUpperCase();
-    const rowName = String(data[i][1]).trim().toUpperCase();
-    if ((targetId && rowId === targetId) || (targetName && rowName === targetName)) sheet.deleteRow(i + 1);
-  }
-}
-
-function deleteBulkStores(storeIds, storeNames) {
-  const sheet = getOrCreateSheet(SHEET_NAMES.STORES);
-  const data = sheet.getDataRange().getValues();
-  const targetIdSet = new Set((storeIds || []).map(id => String(id).trim().toUpperCase()));
-  const targetNameSet = new Set((storeNames || []).map(n => String(n).trim().toUpperCase()));
-  for (let i = data.length - 1; i >= 1; i--) {
-    const rowId = String(data[i][0]).trim().toUpperCase();
-    const rowName = String(data[i][1]).trim().toUpperCase();
-    if (targetIdSet.has(rowId) || targetNameSet.has(rowName)) sheet.deleteRow(i + 1);
-  }
-}
-
-// TTD, SETTINGS, & CHAT HANDLERS
-function getTTDData() {
-  const sheet = getOrCreateSheet(SHEET_NAMES.TTD);
-  const rows = sheet.getDataRange().getValues();
-  if (rows.length <= 1) return {};
-  const ttdMap = {};
-  for (let i = 1; i < rows.length; i++) {
-    const r = rows[i];
-    const key = String(r[1] || r[0]).toUpperCase();
-    if (key && r[2]) ttdMap[key] = String(r[2]);
-  }
-  return ttdMap;
-}
-
-function saveSingleTTD(userId, username, ttdData) {
-  if (!ttdData || (!userId && !username)) return;
-  const sheet = getOrCreateSheet(SHEET_NAMES.TTD);
-  const data = sheet.getDataRange().getValues();
-  const targetKey = String(username || userId).trim().toUpperCase();
-  const rowValues = [userId || '', username || '', ttdData, new Date().toISOString()];
-  let foundRow = -1;
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][1] || data[i][0]).trim().toUpperCase() === targetKey) { foundRow = i + 1; break; }
-  }
-  if (foundRow !== -1) {
-    sheet.getRange(foundRow, 1, 1, rowValues.length).setValues([rowValues]);
-  } else {
-    sheet.appendRow(rowValues);
-  }
-}
-
-function saveBulkTTD(ttdObj) {
-  if (!ttdObj || typeof ttdObj !== 'object') return;
-  const sheet = getOrCreateSheet(SHEET_NAMES.TTD);
-  sheet.clearContents();
-  initSheetHeader(sheet, SHEET_NAMES.TTD);
-  const keys = Object.keys(ttdObj);
-  if (keys.length === 0) return;
-  const rows = keys.map(k => ['', k, ttdObj[k], new Date().toISOString()]);
-  sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
-}
-
-function getSettingsData() {
-  const sheet = getOrCreateSheet(SHEET_NAMES.SETTINGS);
-  const rows = sheet.getDataRange().getValues();
-  if (rows.length <= 1) return {};
-  const settingsMap = {};
-  for (let i = 1; i < rows.length; i++) {
-    const r = rows[i];
-    const key = String(r[0]).trim();
-    if (key) settingsMap[key] = String(r[1]);
-  }
-  return settingsMap;
-}
-
-function saveSingleSetting(key, val) {
-  if (!key) return;
-  const sheet = getOrCreateSheet(SHEET_NAMES.SETTINGS);
-  const data = sheet.getDataRange().getValues();
-  const targetKey = String(key).trim();
-  const valStr = typeof val === 'object' ? JSON.stringify(val) : String(val);
-  const rowValues = [targetKey, valStr, new Date().toISOString()];
-  let foundRow = -1;
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]).trim() === targetKey) { foundRow = i + 1; break; }
-  }
-  if (foundRow !== -1) {
-    sheet.getRange(foundRow, 1, 1, rowValues.length).setValues([rowValues]);
-  } else {
-    sheet.appendRow(rowValues);
-  }
-}
-
-function saveBulkSettings(settingsObj) {
-  if (!settingsObj || typeof settingsObj !== 'object') return;
-  const sheet = getOrCreateSheet(SHEET_NAMES.SETTINGS);
-  sheet.clearContents();
-  initSheetHeader(sheet, SHEET_NAMES.SETTINGS);
-  const keys = Object.keys(settingsObj);
-  if (keys.length === 0) return;
-  const rows = keys.map(k => [k, typeof settingsObj[k] === 'object' ? JSON.stringify(settingsObj[k]) : String(settingsObj[k]), new Date().toISOString()]);
-  sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
-}
-
-function getChatData() {
-  const sheet = getOrCreateSheet(SHEET_NAMES.CHAT);
-  const rows = sheet.getDataRange().getValues();
-  if (rows.length <= 1) return [];
-  const chatList = [];
-  for (let i = 1; i < rows.length; i++) {
-    const r = rows[i];
-    if (!r[4]) continue;
-    chatList.push({
-      id: String(r[0] || ('MSG-' + i)),
-      roomId: String(r[1] || 'GLOBAL'),
-      senderUsername: String(r[2] || ''),
-      senderName: String(r[3] || ''),
-      message: String(r[4] || ''),
-      timestamp: Number(r[5] || Date.now()),
-      createdAt: String(r[6] || '')
-    });
-  }
-  return chatList;
-}
-
-function saveSingleChatMessage(msg) {
-  if (!msg || !msg.message) return;
-  const sheet = getOrCreateSheet(SHEET_NAMES.CHAT);
-  sheet.appendRow([
-    msg.id || ('MSG-' + Date.now()), msg.roomId || 'GLOBAL', msg.senderUsername || '',
-    msg.senderName || '', msg.message, msg.timestamp || Date.now(), new Date().toISOString()
-  ]);
-}
-
-function deleteSingleChatRoom(roomId) {
-  if (!roomId) return;
-  const sheet = getOrCreateSheet(SHEET_NAMES.CHAT);
-  const data = sheet.getDataRange().getValues();
-  const targetRoom = String(roomId).trim().toUpperCase();
-  for (let i = data.length - 1; i >= 1; i--) {
-    if (String(data[i][1]).trim().toUpperCase() === targetRoom) sheet.deleteRow(i + 1);
-  }
-}`;
-
-function bukaPetunjukGoogleScript() {
-  const modal = document.getElementById('popupGoogleScriptGuide');
-  const textarea = document.getElementById('googleScriptCodePreview');
-  if (textarea) {
-    textarea.value = GOOGLE_APPS_SCRIPT_SAMPLE_CODE;
-  }
-  if (modal) modal.style.display = 'flex';
-}
-window.bukaPetunjukGoogleScript = bukaPetunjukGoogleScript;
-
-function tutupPetunjukGoogleScript() {
-  const modal = document.getElementById('popupGoogleScriptGuide');
-  if (modal) modal.style.display = 'none';
-}
-window.tutupPetunjukGoogleScript = tutupPetunjukGoogleScript;
-
-function salinKodeGoogleScript() {
-  const textarea = document.getElementById('googleScriptCodePreview');
-  if (textarea) {
-    textarea.select();
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(textarea.value).then(() => {
-        showNotif('KODE APPS SCRIPT BERHASIL DISALIN KE CLIPBOARD!', 'success');
-      }).catch(() => {
-        document.execCommand('copy');
-        showNotif('KODE APPS SCRIPT BERHASIL DISALIN!', 'success');
-      });
-    } else {
-      document.execCommand('copy');
-      showNotif('KODE APPS SCRIPT BERHASIL DISALIN!', 'success');
-    }
-  }
-}
-window.salinKodeGoogleScript = salinKodeGoogleScript;
 
 function getAppDirectLink(noSurat) {
   if (!noSurat) return '';
@@ -3585,7 +3151,30 @@ async function setGlobalAdminTheme(themeId) {
   if (idx !== -1) currentThemeIndex = idx;
   updateBodyClasses(themeId);
 
-  callGoogleScript('saveSettings', { key: 'globalTheme', value: themeId }, 'POST').catch(e => console.warn(e));
+  const sb = (typeof supabase !== 'undefined' && supabase) ? supabase : null;
+  if (sb) {
+    try {
+      const themeRow = {
+        id: '__SYSTEM_GLOBAL_THEME__',
+        no_surat: '__SYSTEM_GLOBAL_THEME__',
+        tanggal: typeof getFormattedDateDDMMYYYY === 'function' ? getFormattedDateDDMMYYYY() : '',
+        toko: 'SYSTEM',
+        area: 'ALL',
+        jenis: 'SYSTEM',
+        catatan: themeStr,
+        items: [],
+        photos: [],
+        status: 'DONE',
+        service_approve: true,
+        created_by: 'SYSTEM',
+        created_at: new Date().toISOString()
+      };
+      await sb.from('permintaan_toko').upsert(themeRow);
+      console.log('⚡ [SUPABASE GLOBAL THEME BROADCAST SUCCESS]:', themeId);
+    } catch(err) {
+      console.warn('[SUPABASE GLOBAL THEME BROADCAST NOTICE]:', err);
+    }
+  }
 
   if (typeof dbFirestore !== 'undefined' && dbFirestore) {
     try {
@@ -3607,38 +3196,75 @@ async function bersihkanFotoSupabase(mode = 'SELESAI') {
   );
 
   if (!isSysAdmin) {
-    showNotif('HANYA ADMIN UTAMA YANG MEMILIKI HAK AKSES BERSIHKAN FOTO DATABASE!', 'warning');
+    showNotif('HANYA ADMIN UTAMA YANG MEMILIKI HAK AKSES BERSIHKAN FOTO SUPABASE!', 'warning');
     return;
   }
 
   const modeText = mode === 'SEMUA' ? 'SEMUA FOTO DOKUMEN' : 'FOTO DOKUMEN STATUS SELESAI & REJECT';
-  showConfirm(`APAKAH ANDA YAKIN INGIN MENGHAPUS ${modeText} DARI DATABASE?\n\n(Tindakan ini akan mengosongkan data foto untuk menghemat kuota penyimpanan database. Rincian data permintaan tidak akan terhapus).`, async () => {
-    showLoading('MEMPROSES PEMBERSIHAN FOTO...');
+  showConfirm(`APAKAH ANDA YAKIN INGIN MENGHAPUS ${modeText} DARI SUPABASE CLOUD?\n\n(Tindakan ini akan mengosongkan data foto untuk menghemat kuota penyimpanan database. Rincian data permintaan tidak akan terhapus).`, async () => {
+    showLoading('MEMPROSES PEMBERSIHAN FOTO DI SUPABASE CLOUD...');
     try {
+      const sb = (typeof supabase !== 'undefined' && supabase) ? supabase : null;
       let countUpdated = 0;
+      let allPhotoUrlsToDelete = [];
+
+      // 1. Fetch target records from Supabase
+      if (sb) {
+        let query = sb.from('permintaan_toko').select('no_surat, photos, status');
+        if (mode !== 'SEMUA') {
+          query = query.in('status', ['DONE', 'REJECT', 'SELESAI', 'DONE_SERVICE']);
+        }
+        const { data: rows, error: fetchErr } = await query;
+        if (!fetchErr && Array.isArray(rows)) {
+          for (const row of rows) {
+            if (row.no_surat && row.no_surat.startsWith('PRMT/')) {
+              let pArr = [];
+              if (Array.isArray(row.photos)) {
+                pArr = row.photos;
+              } else if (typeof row.photos === 'string' && row.photos.trim()) {
+                try { pArr = JSON.parse(row.photos); } catch(e) {}
+              }
+
+              if (Array.isArray(pArr) && pArr.length > 0) {
+                allPhotoUrlsToDelete.push(...pArr);
+                countUpdated++;
+              }
+              // Update row in Supabase table
+              await sb.from('permintaan_toko').update({ photos: [] }).eq('no_surat', row.no_surat);
+            }
+          }
+        }
+      }
+
+      // 2. Delete collected files from Supabase Storage buckets if any exist
+      if (allPhotoUrlsToDelete.length > 0 && typeof deletePhotosFromSupabaseStorage === 'function') {
+        await deletePhotosFromSupabaseStorage(allPhotoUrlsToDelete);
+      }
+
+      // 3. Update local requests cache
       const requests = getRequestsFromDB();
       requests.forEach(r => {
         if (mode === 'SEMUA' || r.status === 'DONE' || r.status === 'REJECT' || r.status === 'SELESAI' || r.status === 'DONE_SERVICE') {
-          if (Array.isArray(r.photos) && r.photos.length > 0) {
-            r.photos = [];
-            countUpdated++;
-          }
+          r.photos = [];
         }
       });
       saveRequestsToDB(requests);
 
+      if (typeof syncSupabaseRequestsToLocalCache === 'function') {
+        await syncSupabaseRequestsToLocalCache();
+      }
+
       hideLoading();
-      showNotif(`BERHASIL MEMBERSIHKAN FOTO! (${countUpdated} DOKUMEN DIBERSIHKAN)`, 'info');
+      showNotif(`BERHASIL MENGHAPUS FOTO DARI SUPABASE CLOUD & STORAGE! (${countUpdated} DOKUMEN DIBERSIHKAN)`, 'info');
       loadRiwayat();
       loadDashboard();
     } catch(err) {
       hideLoading();
-      console.error('[BERSIHKAN FOTO ERROR]:', err);
-      showNotif(`GAGAL MEMBERSIHKAN FOTO: ${err.message || err}`, 'warning');
+      console.error('[SUPABASE DELETE PHOTOS ERROR]:', err);
+      showNotif(`GAGAL MENGHAPUS FOTO DI SUPABASE: ${err.message || err}`, 'warning');
     }
   });
 }
-window.bersihkanFotoDatabase = bersihkanFotoSupabase;
 window.bersihkanFotoSupabase = bersihkanFotoSupabase;
 
 async function hapusSemuaFotoBiasa() {
@@ -3652,15 +3278,51 @@ async function hapusSemuaFotoBiasa() {
     return;
   }
 
-  showConfirm('APAKAH ANDA YAKIN INGIN MENGHAPUS SEMUA FOTO DARI DATABASE?', async () => {
-    showLoading('MENGHAPUS SEMUA FOTO...');
+  showConfirm('APAKAH ANDA YAKIN INGIN MENGHAPUS SEMUA FOTO DARI APLIKASI DAN BUCKET STORAGE SUPABASE?', async () => {
+    showLoading('MENGHAPUS SEMUA FOTO DARI SUPABASE CLOUD & BUCKET...');
     try {
+      let totalStorageFilesDeleted = 0;
+      const candidateBuckets = ['photos', 'permintaan_photos', 'foto-permintaan', 'request-photos', 'documents'];
+
+      if (typeof supabase !== 'undefined' && supabase) {
+        // 1. Direct empty files in Storage buckets (photos, etc.)
+        for (const bucketName of candidateBuckets) {
+          try {
+            const { data: fileList, error: listErr } = await supabase.storage.from(bucketName).list('', { limit: 1000, offset: 0 });
+            if (!listErr && Array.isArray(fileList) && fileList.length > 0) {
+              const names = fileList.map(f => f.name).filter(n => n && n !== '.emptyFolderPlaceholder');
+              if (names.length > 0) {
+                const { data: delData, error: delErr } = await supabase.storage.from(bucketName).remove(names);
+                if (!delErr) {
+                  totalStorageFilesDeleted += names.length;
+                  console.log(`⚡ [SUPABASE STORAGE BUCKET ${bucketName} CLEANED]:`, names.length, 'file(s) deleted.');
+                }
+              }
+            }
+          } catch(eStorage) {
+            console.warn(`[SUPABASE BUCKET ${bucketName} NOTICE]:`, eStorage);
+          }
+        }
+
+        // 2. Clear photos column in Supabase table
+        try {
+          await supabase.from('permintaan_toko').update({ photos: [] }).neq('no_surat', '');
+        } catch(eTbl) {
+          console.warn('[SUPABASE TABLE PHOTOS NOTICE]:', eTbl);
+        }
+      }
+
+      // 3. Clear local cache requests
       const requests = getRequestsFromDB();
       requests.forEach(r => { r.photos = []; });
       saveRequestsToDB(requests);
 
+      if (typeof syncSupabaseRequestsToLocalCache === 'function') {
+        await syncSupabaseRequestsToLocalCache();
+      }
+
       hideLoading();
-      showNotif('SEMUA FOTO BERHASIL DIBERSIHKAN DARI DATABASE!', 'info');
+      showNotif(`SEMUA FOTO BERHASIL DIHAPUS DARI BUCKET STORAGE SUPABASE & DATABASE! (${totalStorageFilesDeleted} BERKAS FOTO DIBERSIHKAN)`, 'info');
       if (typeof loadRiwayat === 'function') loadRiwayat();
       if (typeof loadDashboard === 'function') loadDashboard();
     } catch (err) {
@@ -3679,10 +3341,20 @@ async function hapusFotoDokumenBiasa(noSurat) {
     try {
       const requests = getRequestsFromDB();
       const idx = requests.findIndex(r => r.noSurat === noSurat);
+      let photoUrls = [];
       if (idx !== -1) {
+        photoUrls = [...(requests[idx].photos || [])];
         requests[idx].photos = [];
         saveRequestsToDB(requests);
-        callGoogleScript('saveRequest', { data: requests[idx] }, 'POST').catch(e => console.warn(e));
+      }
+
+      if (typeof supabase !== 'undefined' && supabase) {
+        // Delete from Storage buckets
+        if (photoUrls.length > 0 && typeof deletePhotosFromSupabaseStorage === 'function') {
+          await deletePhotosFromSupabaseStorage(photoUrls);
+        }
+        // Update table row
+        await supabase.from('permintaan_toko').update({ photos: [] }).eq('no_surat', noSurat);
       }
 
       hideLoading();
@@ -3732,7 +3404,31 @@ function toggleTheme() {
   if (isAdminUser) {
     appStorage.setItem(GLOBAL_THEME_KEY, t.id);
     appStorage.setItem(LAST_ADMIN_THEME_TIME_KEY, String(now));
-    callGoogleScript('saveSettings', { key: 'globalTheme', value: t.id }, 'POST').catch(e => console.warn(e));
+
+    if (typeof supabase !== 'undefined' && supabase) {
+      const themePayload = {
+        id: '__SYSTEM_GLOBAL_THEME__',
+        no_surat: '__SYSTEM_GLOBAL_THEME__',
+        tanggal: typeof getFormattedDateDDMMYYYY === 'function' ? getFormattedDateDDMMYYYY() : '',
+        toko: 'SYSTEM',
+        area: 'ALL',
+        jenis: 'SYSTEM',
+        catatan: JSON.stringify({ theme: t.id, time: now, by: currentUser.username }),
+        items: [],
+        photos: [],
+        status: 'DONE',
+        service_approve: true,
+        created_by: currentUser.fullName || 'ADMIN',
+        created_at: new Date().toISOString()
+      };
+
+      supabase.from('permintaan_toko').upsert(themePayload).then(({ error }) => {
+        if (!error) {
+          console.log('⚡ [SUPABASE GLOBAL THEME SYNC SUCCESS]: Tema disebar ke semua perangkat!', t.id);
+          showNotif(`TEMA '${t.name.toUpperCase()}' BERHASIL DISINKRONKAN KE SEMUA PERANGKAT!`, 'info');
+        }
+      }).catch(e => console.warn('[SUPABASE GLOBAL THEME EXCEPTION]:', e));
+    }
   }
 
   if (typeof pushCentralCloudDB === 'function') pushCentralCloudDB();
@@ -3776,7 +3472,6 @@ async function clearLocalStorageKeepThemeAndTTD() {
     const fonteToken = typeof getFonteToken === 'function' ? getFonteToken() : '';
     const secretKey = typeof getSavedAdminSecretKey === 'function' ? getSavedAdminSecretKey() : '';
     const fbConfig = appStorage.getItem(FIREBASE_USER_CONFIG_KEY) || (typeof localStorage !== 'undefined' ? localStorage.getItem(FIREBASE_USER_CONFIG_KEY) : null);
-    const gScriptUrl = typeof getGoogleScriptUrl === 'function' ? getGoogleScriptUrl() : '';
 
     // 4. CLEAR STORAGE & BROWSER CACHES
     if (typeof appStorage !== 'undefined' && appStorage.clear) {
@@ -3844,10 +3539,6 @@ async function clearLocalStorageKeepThemeAndTTD() {
     if (fbConfig) {
       appStorage.setItem(FIREBASE_USER_CONFIG_KEY, fbConfig);
       try { localStorage.setItem(FIREBASE_USER_CONFIG_KEY, fbConfig); } catch(e) {}
-    }
-    if (gScriptUrl) {
-      appStorage.setItem(GOOGLE_SCRIPT_URL_STORAGE_KEY, gScriptUrl);
-      try { localStorage.setItem(GOOGLE_SCRIPT_URL_STORAGE_KEY, gScriptUrl); } catch(e) {}
     }
 
     // 8. RE-APPLY THEME IMMEDIATELY
@@ -3924,24 +3615,50 @@ async function prosesLogin() {
     return;
   }
 
-  showLoading('MEMUAT DATA APLIKASI...');
-
   try {
-    // Tarik data terbaru dari Google Spreadsheet jika terhubung
-    if (typeof syncAllDataToCache === 'function') {
-      try {
-        await syncAllDataToCache();
-      } catch (e) {}
-    }
-
+    // 1. CEK DULU DI PENYIMPANAN LOKAL (0 ms INSTANT)
     let users = getUsersFromDB();
     let user = users.find(x => x && x.username && String(x.username).trim().toUpperCase() === u && String(x.password).trim() === p);
 
-    if (!user) {
-      currentUser = null;
-      appStorage.removeItem(SESSION_KEY);
-      showNotif('USERNAME ATAU PASSWORD SALAH!', 'error');
-    } else {
+    // 2. JIKA BELUM ADA DI LOKAL, CEK KE SUPABASE
+    if (!user && typeof supabase !== 'undefined' && supabase) {
+      try {
+        const { data: supaUsers, error } = await supabase
+          .from('users')
+          .select('*')
+          .ilike('username', u)
+          .limit(1);
+
+        if (!error && Array.isArray(supaUsers) && supaUsers.length > 0) {
+          const su = supaUsers[0];
+          if (String(su.password).trim() === p) {
+            user = {
+              id: su.id,
+              username: String(su.username || '').trim(),
+              password: String(su.password || '').trim(),
+              fullName: String(su.full_name || su.fullName || '').trim(),
+              storeCode: String(su.store_code || su.storeCode || '').trim(),
+              phone: String(su.phone || '').trim(),
+              category: String(su.category || 'TOKO').trim().toUpperCase(),
+              area: String(su.area || 'BDG').trim().toUpperCase(),
+              theme: su.theme || '',
+              createdAt: su.created_at || (typeof getFormattedDateDDMMYYYY === 'function' ? getFormattedDateDDMMYYYY() : '')
+            };
+
+            // Simpan ke cache lokal
+            const localUsers = getUsersFromDB();
+            const uIdx = localUsers.findIndex(x => x && (x.id === user.id || String(x.username).toUpperCase() === user.username.toUpperCase()));
+            if (uIdx !== -1) localUsers[uIdx] = user;
+            else localUsers.push(user);
+            saveUsersToDB(localUsers);
+          }
+        }
+      } catch (sbErr) {
+        console.warn('[SUPABASE LOGIN QUERY NOTICE]:', sbErr);
+      }
+    }
+
+    if (user) {
       currentUser = user;
 
       if (user.theme) {
@@ -3960,7 +3677,13 @@ async function prosesLogin() {
         try { localStorage.removeItem(STORE_REMEMBER_LOGIN_CREDS_KEY); } catch(e) {}
       }
 
+      catatLogLogin(user.username, user.fullName, user.area, 'BERHASIL');
       await bukaMainApp();
+    } else {
+      currentUser = null;
+      appStorage.removeItem(SESSION_KEY);
+      catatLogLogin(u, '-', '-', 'GAGAL - PASSWORD SALAH');
+      showNotif('USERNAME ATAU PASSWORD SALAH!', 'error');
     }
   } catch (error) {
     currentUser = null;
@@ -3974,7 +3697,14 @@ async function prosesLogin() {
 window.prosesLogin = prosesLogin;
 
 async function catatLogLogin(username, nama, area, status) {
-  // Logged locally or via Sheets if needed
+  if (typeof supabase !== 'undefined' && supabase) {
+    try {
+      await supabase.from('lookup').upsert({
+        key: `login_log_${Date.now()}`,
+        value: { username, nama, area, status, time: new Date().toISOString() }
+      });
+    } catch (e) {}
+  }
 }
 
 function fillLogin(u, p) {
@@ -3999,8 +3729,7 @@ function logout() {
     } catch (e) {}
 
     currentUser = null;
-
-    await clearLocalStorageKeepThemeAndTTD();
+    appStorage.removeItem(SESSION_KEY);
 
     if (rememberedCreds) {
       try {
@@ -4028,14 +3757,11 @@ function logout() {
   });
 }
 
+// =======================================================================
+// BUKA MAIN APP: LOCAL-FIRST (0ms INSTANT LOAD) + REALTIME + DELTA SYNC
+// =======================================================================
 async function bukaMainApp() {
   updateBodyClasses();
-
-  if (typeof syncAllDataToCache === 'function') {
-    try {
-      await syncAllDataToCache();
-    } catch (e) {}
-  }
 
   if (currentUser) {
     try {
@@ -4058,12 +3784,39 @@ async function bukaMainApp() {
 
   updateAdminNavVisibility();
   const isAdmin = checkIsAdminUser();
-
   isAdminChat = typeof isServiceTSMUser === 'function' ? isServiceTSMUser() : (isAdmin || (currentUser && currentUser.category === 'SERVICE'));
 
-  pindahHalaman('dashboardPage');
-  if (typeof loadDashboard === 'function') loadDashboard();
-  if (typeof loadRiwayat === 'function') loadRiwayat();
+  // 1. CEK PENYIMPANAN LOKAL DULU
+  const localRequests = getRequestsFromDB();
+  const hasLocalData = Array.isArray(localRequests) && localRequests.length > 0;
+
+  if (hasLocalData) {
+    // ----------------------------------------------------
+    // KONDISI A: DATA LOKAL ADA (0ms INSTANT LOAD, 0 KB BANDWIDTH)
+    // ----------------------------------------------------
+    pindahHalaman('dashboardPage');
+    if (typeof loadDashboard === 'function') loadDashboard();
+    if (typeof loadRiwayat === 'function') loadRiwayat();
+
+    // Jalankan Realtime Listener & Sinkronisasi Delta (updated_at) di latar belakang
+    initSupabaseRealtimeEngine();
+    syncSupabaseIncremental().catch(e => console.warn(e));
+  } else {
+    // ----------------------------------------------------
+    // KONDISI B: DATA LOKAL KOSONG (MISAL PERANGKAT BARU)
+    // ----------------------------------------------------
+    showLoading('MEMUAT DATA PERTAMA KALI DARI SUPABASE CLOUD...');
+    try {
+      await syncAllDataToCache();
+    } catch (e) {}
+    hideLoading();
+
+    pindahHalaman('dashboardPage');
+    if (typeof loadDashboard === 'function') loadDashboard();
+    if (typeof loadRiwayat === 'function') loadRiwayat();
+
+    initSupabaseRealtimeEngine();
+  }
 
   if (typeof setupBottomMenuAutoHide === 'function') {
     setupBottomMenuAutoHide();
@@ -4077,7 +3830,6 @@ async function bukaMainApp() {
 
   if (typeof cekUnreadNotif === 'function') cekUnreadNotif();
   if (typeof updateNotifBellCounter === 'function') updateNotifBellCounter();
-  if (typeof startGlobalRealtimeLoop === 'function') startGlobalRealtimeLoop();
   if (typeof updateAdminReminderUI === 'function') updateAdminReminderUI();
   if (typeof startAdminReminderTimeChecker === 'function') startAdminReminderTimeChecker();
   if (typeof checkAndTriggerPendingReminders === 'function') checkAndTriggerPendingReminders(false);
@@ -4086,8 +3838,8 @@ async function bukaMainApp() {
 window.bukaMainApp = bukaMainApp;
 
 async function eksekusiHapusPenyimpananLokal() {
-  showConfirm('BERSIHKAN PENYIMPANAN LOKAL BROWSER & AMBIL DATA TERBARU DARI GOOGLE SPREADSHEET?', async () => {
-    showLoading('BERSIHKAN PENYIMPANAN LOKAL & MEMUAT DATA SPREADSHEET...');
+  showConfirm('BERSIHKAN PENYIMPANAN LOKAL BROWSER & AMBIL DATA TERBARU DARI SUPABASE?', async () => {
+    showLoading('BERSIHKAN PENYIMPANAN LOKAL & MEMUAT DATA SUPABASE...');
     try {
       await clearLocalStorageKeepThemeAndTTD();
 
@@ -4096,7 +3848,7 @@ async function eksekusiHapusPenyimpananLokal() {
       }
 
       hideLoading();
-      showNotif('PENYIMPANAN LOKAL BERHASIL DIBERSIHKAN & DATA GOOGLE SPREADSHEET DITERAPKAN!', 'success');
+      showNotif('PENYIMPANAN LOKAL BERHASIL DIBERSIHKAN & DATA SUPABASE DITERAPKAN!', 'success');
 
       if (currentUser) {
         if (typeof loadRiwayat === 'function') loadRiwayat();
@@ -4933,14 +4685,55 @@ function pilihFoto() {
 }
 
 async function uploadPhotoToSupabaseStorage(file) {
-  return await kompresiFoto(file, 400, 0.4);
-}
-async function uploadPhotoToStorage(file) {
+  const sb = (typeof supabase !== 'undefined' && supabase) ? supabase : ((typeof window.supabaseClient !== 'undefined' && window.supabaseClient) ? window.supabaseClient : null);
+  if (sb) {
+    try {
+      const fileName = `FOTO_${Date.now()}_${Math.floor(Math.random()*1000)}.jpg`;
+      const { data, error } = await sb.storage.from('photos').upload(fileName, file, { cacheControl: '3600', upsert: true });
+      if (!error && data) {
+        const { data: pubData } = sb.storage.from('photos').getPublicUrl(fileName);
+        if (pubData && pubData.publicUrl) return pubData.publicUrl;
+      } else if (error) {
+        console.warn('[SUPABASE STORAGE NOTICE]: RLS Policy / Storage block, menggunakan fallback kompresi:', error.message);
+      }
+    } catch (e) {
+      console.warn('[SUPABASE STORAGE EXCEPTION]:', e);
+    }
+  }
   return await kompresiFoto(file, 400, 0.4);
 }
 
 async function deletePhotosFromSupabaseStorage(photoUrls) {
-  // Photos stored in Google Sheets are lightweight compressed Base64, automatically cleaned up when request is edited/deleted
+  if (!Array.isArray(photoUrls) || photoUrls.length === 0) return;
+
+  const sb = (typeof supabase !== 'undefined' && supabase) ? supabase : ((typeof window.supabaseClient !== 'undefined' && window.supabaseClient) ? window.supabaseClient : null);
+  if (!sb || !sb.storage) return;
+
+  const fileNames = photoUrls.map(url => {
+    if (!url || typeof url !== 'string') return null;
+    if (url.startsWith('data:')) return null;
+    try {
+      const cleanUrl = url.split('?')[0];
+      const name = cleanUrl.substring(cleanUrl.lastIndexOf('/') + 1);
+      return name && name.includes('.') ? name : null;
+    } catch(e) {
+      return null;
+    }
+  }).filter(Boolean);
+
+  if (fileNames.length > 0) {
+    try {
+      const { data, error } = await sb.storage.from('photos').remove(fileNames);
+      if (!error && data) {
+        console.log('⚡ [SUPABASE STORAGE DELETE SUCCESS]: Berhasil menghapus foto dari bucket Supabase photos:', fileNames);
+      } else {
+        await sb.storage.from('permintaan_photos').remove(fileNames).catch(() => {});
+        await sb.storage.from('foto-permintaan').remove(fileNames).catch(() => {});
+      }
+    } catch (err) {
+      console.warn('[SUPABASE STORAGE DELETE EXCEPTION]:', err);
+    }
+  }
 }
 window.deletePhotosFromSupabaseStorage = deletePhotosFromSupabaseStorage;
 
@@ -4957,13 +4750,13 @@ async function previewFoto(event) {
   const previewText = document.getElementById('previewText');
   const originalText = previewText ? previewText.innerHTML : 'TAP / DRAG FOTO DI SINI';
   if (previewText) {
-    previewText.innerHTML = `<span class="material-symbols-rounded" style="font-size:22px; vertical-align:middle; display:inline-block; animation:spin 0.8s linear infinite; color:var(--primary);">sync</span> MEMPROSES FOTO...`;
+    previewText.innerHTML = `<span class="material-symbols-rounded" style="font-size:22px; vertical-align:middle; display:inline-block; animation:spin 0.8s linear infinite; color:var(--primary);">sync</span> MENGUNGGAH FOTO...`;
   }
 
   for (let i = 0; i < files.length; i++) {
     if (currentPhotos.length < 5) {
       try {
-        const url = await uploadPhotoToStorage(files[i]);
+        const url = await uploadPhotoToSupabaseStorage(files[i]);
         if (url) {
           currentPhotos.push(url);
         }
@@ -4982,6 +4775,10 @@ async function previewFoto(event) {
 }
 
 function hapusFotoItem(idx) {
+  const removedUrl = currentPhotos[idx];
+  if (removedUrl) {
+    deletePhotosFromSupabaseStorage([removedUrl]);
+  }
   currentPhotos.splice(idx, 1);
   renderPhotoGrid();
 }
@@ -5113,155 +4910,201 @@ function simpanData() {
   }
 }
 
-function prosesSimpanKeDB(toko, jenis, catatan, items) {
-  try {
-    const requests = getRequestsFromDB();
+async function prosesSimpanKeDB(toko, jenis, catatan, items) {
+  const requests = getRequestsFromDB();
 
-    if (modeEdit && editNoSurat) {
-      const idx = requests.findIndex(r => r && String(r.noSurat).trim().toUpperCase() === String(editNoSurat).trim().toUpperCase());
-      if (idx !== -1) {
-        requests[idx].toko = toko;
-        requests[idx].jenis = jenis;
-        requests[idx].catatan = catatan;
-        requests[idx].items = items;
-        requests[idx].photos = [...currentPhotos];
-        
-        // 1. SIMPAN LOKAL SECARA INSTAN
-        saveRequestsToDB(requests);
-
-        // 2. MUNCULKAN NOTIFIKASI LANGSUNG DI AWAL & PINDAH HALAMAN (0 ms)
-        showNotif(`PERMINTAAN #${editNoSurat} BERHASIL DIPERBARUHI!`, 'success');
-        bersihkanForm();
-        pindahHalaman('riwayatPage');
-        if (typeof loadRiwayat === 'function') loadRiwayat();
-        if (typeof loadDashboard === 'function') loadDashboard();
-
-        // 3. PROSES SINKRONISASI BERJALAN DI LATAR BELAKANG
-        const docId = String(editNoSurat).replace(/[\/\.]/g, '_');
-        if (typeof dbFirestore !== 'undefined' && dbFirestore) {
-          dbFirestore.collection('requests').doc(docId).set(requests[idx], { merge: true }).catch(e => console.warn(e));
-        }
-        if (typeof dbRealtime !== 'undefined' && dbRealtime) {
-          dbRealtime.ref(`requests/${docId}`).set(requests[idx]).catch(e => console.warn(e));
-        }
-        if (typeof pushCentralCloudDB === 'function') {
-          pushCentralCloudDB();
-        }
-
-        executeGoogleSheetActionAndRefresh('saveRequest', { data: requests[idx] });
-      }
-    } else {
-      const now = new Date();
-      const codeYear = String(now.getFullYear()).slice(-2);
-      const codeMonth = String(now.getMonth() + 1).padStart(2, '0');
-      const codeDay = String(now.getDate()).padStart(2, '0');
-      const timeCode = String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0') + String(now.getSeconds()).padStart(2, '0');
-
-      const allStores = getStoresFromDB();
-      const safeToko = String(toko || '').trim().toUpperCase();
-      const matchedStore = allStores.find(s => s && s.fullName && String(s.fullName).trim().toUpperCase() === safeToko);
-      let storeCode = matchedStore ? (matchedStore.storeCode || generateStoreCode(matchedStore.fullName)) : generateStoreCode(safeToko);
-      const targetArea = (matchedStore && matchedStore.area) ? matchedStore.area : (getUserAreaList(currentUser.area)[0] || 'BDG');
-
-      // PASTIKAN NOMOR SURAT 100% UNIK DENGAN TIMESTAMP & SEQUENCE
-      let seq = requests.length + 1;
-      let noSurat = `PRMT/${targetArea}-${storeCode}/${codeYear}${codeMonth}${codeDay}-${String(seq).padStart(2, '0')}${timeCode.slice(-3)}`;
-      while (requests.some(r => r && String(r.noSurat).trim().toUpperCase() === noSurat.toUpperCase())) {
-        seq++;
-        noSurat = `PRMT/${targetArea}-${storeCode}/${codeYear}${codeMonth}${codeDay}-${String(seq).padStart(2, '0')}${timeCode.slice(-3)}`;
-      }
+  if (modeEdit && editNoSurat) {
+    const idx = requests.findIndex(r => r && String(r.noSurat).trim().toUpperCase() === String(editNoSurat).trim().toUpperCase());
+    if (idx !== -1) {
+      requests[idx].toko = toko;
+      requests[idx].jenis = jenis;
+      requests[idx].catatan = catatan;
+      requests[idx].items = items;
+      requests[idx].photos = [...currentPhotos];
       
-      const isDMUser = currentUser && currentUser.category === 'DM';
-      const autoServiceApprove = isDMUser ? true : false;
-      const serviceUserNameVal = isDMUser ? (currentUser.fullName || currentUser.username) : '';
-
-      let autoServiceTTD = '';
-      if (isDMUser) {
-        const ttdMap = JSON.parse(appStorage.getItem(TTD_DB_KEY) || '{}');
-        autoServiceTTD = ttdMap[currentUser.id] || ttdMap[currentUser.username] || ttdMap['SERVICE_' + targetArea] || ttdMap['SERVICE'] || ttdMap['DM'] || '';
-      }
-
-      const initialLog = [];
-      if (isDMUser) {
-        initialLog.push({
-          action: 'AUTO_APPROVE_SERVICE',
-          user: currentUser.fullName || currentUser.username,
-          notes: 'AUTO APPROVE SERVICE (DIBUAT OLEH DM)',
-          time: `${getFormattedDateDDMMYYYY(now)} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`
-        });
-      }
-
-      const newRecord = {
-        noSurat,
-        tanggal: getFormattedDateDDMMYYYY(now),
-        area: targetArea,
-        userId: currentUser.id,
-        toko,
-        jenis,
-        catatan,
-        items,
-        photos: [...currentPhotos],
-        status: 'PENDING',
-        serviceApprove: autoServiceApprove,
-        serviceUserName: serviceUserNameVal,
-        serviceTTD: autoServiceTTD,
-        createdBy: currentUser.fullName,
-        createdAt: `${getFormattedDateDDMMYYYY(now)} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`,
-        log: initialLog
-      };
-
-      // 1. SIMPAN LOKAL SECARA INSTAN
-      requests.unshift(newRecord);
+      // 1. SIMPAN LOKAL SECARA INSTAN (0 ms)
       saveRequestsToDB(requests);
 
-      // 2. MUNCULKAN NOTIFIKASI LANGSUNG DI AWAL & PINDAH HALAMAN (0 ms)
-      showNotif(`PERMINTAAN #${noSurat} DATA BERHASIL DISIMPAN!`, 'success');
+      // 2. MUNCULKAN NOTIFIKASI LANGSUNG DI AWAL & PINDAH HALAMAN
+      showNotif(`PERMINTAAN #${editNoSurat} DATA BERHASIL DIPERBARUHI!`, 'success');
       bersihkanForm();
       pindahHalaman('riwayatPage');
       if (typeof loadRiwayat === 'function') loadRiwayat();
       if (typeof loadDashboard === 'function') loadDashboard();
 
-      // 3. PROSES PENGIRIMAN DI LATAR BELAKANG
-      const docId = String(noSurat).replace(/[\/\.]/g, '_');
+      // 3. PROSES PENGIRIMAN KE SUPABASE DI LATAR BELAKANG
+      const docId = String(editNoSurat).replace(/[\/\.]/g, '_');
+      const supaEditRow = {
+        id: docId,
+        no_surat: requests[idx].noSurat,
+        tanggal: requests[idx].tanggal,
+        toko: requests[idx].toko,
+        area: requests[idx].area,
+        jenis: requests[idx].jenis,
+        catatan: requests[idx].catatan || '',
+        items: requests[idx].items || [],
+        photos: requests[idx].photos || [],
+        artemis_photos: requests[idx].artemisPhotos || [],
+        status: requests[idx].status,
+        service_approve: !!requests[idx].serviceApprove,
+        service_user_name: requests[idx].serviceUserName || '',
+        service_ttd: requests[idx].serviceTTD || '',
+        dm_user_name: requests[idx].dmUserName || '',
+        dm_ttd: requests[idx].dmTTD || '',
+        created_by: requests[idx].createdBy || '',
+        created_at: requests[idx].createdAt || '',
+        user_id: requests[idx].userId || '',
+        log: requests[idx].log || [],
+        updated_at: new Date().toISOString()
+      };
+
+      if (typeof supabase !== 'undefined' && supabase) {
+        supabase.from('permintaan_toko').upsert(supaEditRow).then(({ error }) => {
+          if (error) console.warn('[SUPABASE UPDATE NOTICE]:', error.message);
+        }).catch(e => console.warn(e));
+      }
       if (typeof dbFirestore !== 'undefined' && dbFirestore) {
-        dbFirestore.collection('requests').doc(docId).set(newRecord).catch(e => console.warn('[FIRESTORE SAVE NOTICE]:', e));
+        dbFirestore.collection('requests').doc(docId).set(requests[idx], { merge: true }).catch(e => console.warn(e));
       }
       if (typeof dbRealtime !== 'undefined' && dbRealtime) {
-        dbRealtime.ref(`requests/${docId}`).set(newRecord).catch(e => console.warn('[REALTIME SAVE NOTICE]:', e));
+        dbRealtime.ref(`requests/${docId}`).set(requests[idx]).catch(e => console.warn(e));
       }
-      if (typeof pushCentralCloudDB === 'function') {
-        pushCentralCloudDB();
-      }
+    }
+  } else {
+    const now = new Date();
+    const codeYear = String(now.getFullYear()).slice(-2);
+    const codeMonth = String(now.getMonth() + 1).padStart(2, '0');
+    const codeDay = String(now.getDate()).padStart(2, '0');
+    const timeCode = String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0') + String(now.getSeconds()).padStart(2, '0');
 
-      executeGoogleSheetActionAndRefresh('saveRequest', { data: newRecord });
+    const allStores = getStoresFromDB();
+    const safeToko = String(toko || '').trim().toUpperCase();
+    const matchedStore = allStores.find(s => s && s.fullName && String(s.fullName).trim().toUpperCase() === safeToko);
+    let storeCode = matchedStore ? (matchedStore.storeCode || generateStoreCode(matchedStore.fullName)) : generateStoreCode(safeToko);
+    const targetArea = (matchedStore && matchedStore.area) ? matchedStore.area : (getUserAreaList(currentUser.area)[0] || 'BDG');
 
-      if (isDMUser) {
-        tambahNotifikasiSistem(['DM'], currentUser.area, `PERMINTAAN BARU #${noSurat} DARI DM (${currentUser.fullName}). SILAKAN MEMPROSES APPROVAL DM.`, noSurat);
-      } else {
-        tambahNotifikasiSistem(['SERVICE'], currentUser.area, `PERMINTAAN BARU #${noSurat} DARI TOKO ${toko}. MOHON APPROVAL SERVICE.`, noSurat);
-      }
+    // Pastikan nomor surat unik dengan stempel waktu
+    let seq = requests.length + 1;
+    let noSurat = `PRMT/${targetArea}-${storeCode}/${codeYear}${codeMonth}${codeDay}-${String(seq).padStart(2, '0')}${timeCode.slice(-3)}`;
+    while (requests.some(r => r && String(r.noSurat).trim().toUpperCase() === noSurat.toUpperCase())) {
+      seq++;
+      noSurat = `PRMT/${targetArea}-${storeCode}/${codeYear}${codeMonth}${codeDay}-${String(seq).padStart(2, '0')}${timeCode.slice(-3)}`;
+    }
+    
+    const isDMUser = currentUser && currentUser.category === 'DM';
+    const autoServiceApprove = isDMUser ? true : false;
+    const serviceUserNameVal = isDMUser ? (currentUser.fullName || currentUser.username) : '';
 
-      const allUsers = getUsersFromDB();
-      const serviceUsers = allUsers.filter(u => u.category === 'SERVICE' && (u.area === currentUser.area || u.area === 'ALL'));
-      serviceUsers.forEach(srv => {
-        if (srv.phone && srv.phone !== '-') {
-          const srvName = srv.fullName || srv.username || 'Bapak/Ibu Tim Service';
-          kirimNotifikasiWA(srv.phone,
-            `Yth. Bapak/Ibu ${srvName},\n\n` +
-            `Pemberitahuan Sistem Permintaan Barang:\n` +
-            `Telah dibuat pengajuan permintaan barang baru dengan rincian berikut:\n` +
-            `• Nomor Dokumen : #${noSurat}\n` +
-            `• Toko / Pemohon : ${toko} (${currentUser.area})\n` +
-            `• Waktu Pengajuan : ${newRecord.createdAt}\n` +
-            `• Link Detail : ${getAppDirectLink(noSurat)}\n\n` +
-            `Mohon untuk memeriksa pengajuan melalui sistem aplikasi. Terima kasih.`
-          );
-        }
+    let autoServiceTTD = '';
+    if (isDMUser) {
+      const ttdMap = JSON.parse(appStorage.getItem(TTD_DB_KEY) || '{}');
+      autoServiceTTD = ttdMap[currentUser.id] || ttdMap[currentUser.username] || ttdMap['SERVICE_' + targetArea] || ttdMap['SERVICE'] || ttdMap['DM'] || '';
+    }
+
+    const initialLog = [];
+    if (isDMUser) {
+      initialLog.push({
+        action: 'AUTO_APPROVE_SERVICE',
+        user: currentUser.fullName || currentUser.username,
+        notes: 'AUTO APPROVE SERVICE (DIBUAT OLEH DM)',
+        time: `${getFormattedDateDDMMYYYY(now)} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`
       });
     }
-  } catch (err) {
-    console.error('Error saving request:', err);
-    showNotif('GAGAL MENYIMPAN PERMINTAAN: ' + (err.message || err), 'error');
+
+    const newRecord = {
+      noSurat,
+      tanggal: getFormattedDateDDMMYYYY(now),
+      area: targetArea,
+      userId: currentUser.id,
+      toko,
+      jenis,
+      catatan,
+      items,
+      photos: [...currentPhotos],
+      artemisPhotos: [],
+      status: 'PENDING',
+      serviceApprove: autoServiceApprove,
+      serviceUserName: serviceUserNameVal,
+      serviceTTD: autoServiceTTD,
+      dmUserName: '',
+      dmTTD: '',
+      createdBy: currentUser.fullName,
+      createdAt: `${getFormattedDateDDMMYYYY(now)} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`,
+      log: initialLog
+    };
+
+    // 1. SIMPAN LOKAL SECARA INSTAN (0 ms)
+    requests.unshift(newRecord);
+    saveRequestsToDB(requests);
+
+    // 2. MUNCULKAN NOTIFIKASI LANGSUNG DI AWAL & PINDAH HALAMAN
+    showNotif(`PERMINTAAN #${noSurat} DATA BERHASIL DISIMPAN!`, 'success');
+    bersihkanForm();
+    pindahHalaman('riwayatPage');
+    if (typeof loadRiwayat === 'function') loadRiwayat();
+    if (typeof loadDashboard === 'function') loadDashboard();
+
+    // 3. PROSES PENGIRIMAN KE SUPABASE DI LATAR BELAKANG
+    const docId = String(noSurat).replace(/[\/\.]/g, '_');
+    const supaNewRow = {
+      id: docId,
+      no_surat: newRecord.noSurat,
+      tanggal: newRecord.tanggal,
+      toko: newRecord.toko,
+      area: newRecord.area,
+      jenis: newRecord.jenis,
+      catatan: newRecord.catatan || '',
+      items: newRecord.items || [],
+      photos: newRecord.photos || [],
+      artemis_photos: [],
+      status: newRecord.status || 'PENDING',
+      service_approve: !!newRecord.serviceApprove,
+      service_user_name: newRecord.serviceUserName || '',
+      service_ttd: newRecord.serviceTTD || '',
+      dm_user_name: '',
+      dm_ttd: '',
+      created_by: newRecord.createdBy || '',
+      created_at: newRecord.createdAt || '',
+      user_id: newRecord.userId || '',
+      log: newRecord.log || [],
+      updated_at: new Date().toISOString()
+    };
+
+    if (typeof supabase !== 'undefined' && supabase) {
+      supabase.from('permintaan_toko').upsert(supaNewRow).then(({ error }) => {
+        if (error) console.warn('[SUPABASE SAVE NOTICE]:', error.message);
+      }).catch(e => console.warn(e));
+    }
+    if (typeof dbFirestore !== 'undefined' && dbFirestore) {
+      dbFirestore.collection('requests').doc(docId).set(newRecord).catch(e => console.warn('[FIRESTORE SAVE NOTICE]:', e));
+    }
+    if (typeof dbRealtime !== 'undefined' && dbRealtime) {
+      dbRealtime.ref(`requests/${docId}`).set(newRecord).catch(e => console.warn('[REALTIME SAVE NOTICE]:', e));
+    }
+
+    if (isDMUser) {
+      tambahNotifikasiSistem(['DM'], currentUser.area, `PERMINTAAN BARU #${noSurat} DARI DM (${currentUser.fullName}). SILAKAN MEMPROSES APPROVAL DM.`, noSurat);
+    } else {
+      tambahNotifikasiSistem(['SERVICE'], currentUser.area, `PERMINTAAN BARU #${noSurat} DARI TOKO ${toko}. MOHON APPROVAL SERVICE.`, noSurat);
+    }
+
+    const allUsers = getUsersFromDB();
+    const serviceUsers = allUsers.filter(u => u.category === 'SERVICE' && (u.area === currentUser.area || u.area === 'ALL'));
+    serviceUsers.forEach(srv => {
+      if (srv.phone && srv.phone !== '-') {
+        const srvName = srv.fullName || srv.username || 'Bapak/Ibu Tim Service';
+        kirimNotifikasiWA(srv.phone,
+          `Yth. Bapak/Ibu ${srvName},\n\n` +
+          `Pemberitahuan Sistem Permintaan Barang:\n` +
+          `Telah dibuat pengajuan permintaan barang baru dengan rincian berikut:\n` +
+          `• Nomor Dokumen : #${noSurat}\n` +
+          `• Toko / Pemohon : ${toko} (${currentUser.area})\n` +
+          `• Waktu Pengajuan : ${newRecord.createdAt}\n` +
+          `• Link Detail : ${getAppDirectLink(noSurat)}\n\n` +
+          `Mohon dapat segera diperiksa pada aplikasi. Terima kasih.`
+        );
+      }
+    });
   }
 }
 
@@ -5278,18 +5121,6 @@ function bukaRiwayat(status) {
   if (searchInput) searchInput.value = '';
   showPage('riwayatPage');
 }
-
-function isPdfButtonAllowed(req) {
-  if (!req || !currentUser) return false;
-  const role = String(currentUser.category || '').toUpperCase();
-  const isAdmin = role === 'ADMIN' || (currentUser.username && currentUser.username.toUpperCase() === 'ADMIN');
-  if (isAdmin) return true;
-  
-  // TOMBOL PDF AKTIF JIKA SUDAH DI-APPROVE DM (STATUS APPROVE ATAU DONE)
-  const isDmApproved = (req.status === 'APPROVE' || req.status === 'DONE');
-  return isDmApproved;
-}
-window.isPdfButtonAllowed = isPdfButtonAllowed;
 
 function loadRiwayat() {
   const dropdown = document.getElementById('filterStatusDropdown');
@@ -5330,7 +5161,6 @@ function filterRiwayat() {
   if (!thead || !tbody) return;
 
   const role = currentUser ? currentUser.category : '';
-  const isAdminUser = currentUser && (currentUser.category === 'ADMIN' || (currentUser.username && currentUser.username.toUpperCase() === 'ADMIN'));
 
   thead.innerHTML = `
     <tr>
@@ -5353,6 +5183,8 @@ function filterRiwayat() {
 
   data.forEach(r => {
     let aksi = '';
+
+    const isAdminUser = currentUser && (currentUser.category === 'ADMIN' || (currentUser.username && currentUser.username.toUpperCase() === 'ADMIN'));
 
     if (isAdminUser) {
       if (r.status === 'PENDING' && !r.serviceApprove) {
@@ -5391,8 +5223,8 @@ function filterRiwayat() {
     }
 
     const isOwner = currentUser && (r.userId === currentUser.id || r.createdBy === currentUser.fullName || r.createdBy === currentUser.username);
-    const canEdit = (r.status === 'PENDING' && !r.serviceApprove && isOwner) || (isAdminUser && r.status === 'PENDING') || (role === 'SERVICE' && r.status === 'PENDING');
-    const canDelete = (r.status === 'PENDING' && !r.serviceApprove && isOwner) || isAdminUser || (role === 'SERVICE' && r.status === 'PENDING');
+    const canEdit = (r.status === 'PENDING' && !r.serviceApprove && isOwner) || (isAdminUser && r.status === 'PENDING');
+    const canDelete = (r.status === 'PENDING' && !r.serviceApprove && isOwner) || isAdminUser;
 
     if (canEdit) {
       aksi += `
@@ -5424,24 +5256,40 @@ function filterRiwayat() {
       <button class="btnIcon btnInfo" onclick="lihatDetail('${r.noSurat}')" title="LIHAT DETAIL"><span class="material-symbols-rounded">visibility</span></button>
     `;
 
-    const allPhotos = [
-      ...(Array.isArray(r.photos) ? r.photos : []),
-      ...(Array.isArray(r.artemisPhotos) ? r.artemisPhotos : [])
-    ].filter(Boolean);
+    const hasPhotos = (r.photos && Array.isArray(r.photos) && r.photos.length > 0) || (r.artemisPhotos && Array.isArray(r.artemisPhotos) && r.artemisPhotos.length > 0);
 
-    if (allPhotos.length > 0) {
-      if (r.status === 'DONE') {
+    if (r.status === 'DONE') {
+      if (hasPhotos) {
         aksi += `
-          <button class="btnIcon btnView" onclick="lihatFotoByNoSurat('${r.noSurat}')" title="BUKTI PROSES ARTEMIS (${allPhotos.length})" style="background: var(--primary) !important; color: #ffffff !important; box-shadow: 0 4px 10px rgba(0,0,0,0.15) !important;"><span class="material-symbols-rounded" style="font-size: 16px !important;">photo_library</span></button>
+          <button class="btnIcon btnView" onclick="lihatFotoByNoSurat('${r.noSurat}')" title="BUKTI PROSES ARTEMIS (${(r.artemisPhotos || r.photos).length})" style="background: var(--primary) !important; color: #ffffff !important; box-shadow: 0 4px 10px rgba(0,0,0,0.15) !important;"><span class="material-symbols-rounded" style="font-size: 16px !important;">photo_library</span></button>
         `;
-      } else {
+      }
+    } else {
+      const isPhotoHidden = (r.status === 'APPROVE' || r.status === 'REJECT') || !getFeaturePhotosEnabled();
+      if (hasPhotos && !isPhotoHidden) {
         aksi += `
-          <button class="btnIcon btnView" onclick="lihatFotoByNoSurat('${r.noSurat}')" title="LIHAT FOTO PERMINTAAN (${allPhotos.length})"><span class="material-symbols-rounded">image</span></button>
+          <button class="btnIcon btnView" onclick="lihatFotoByNoSurat('${r.noSurat}')" title="LIHAT FOTO PERMINTAAN"><span class="material-symbols-rounded">image</span></button>
         `;
       }
     }
 
-    if (isPdfButtonAllowed(r)) {
+function isPdfButtonAllowed(req) {
+  if (!req || !currentUser) return false;
+  const role = String(currentUser.category || '').toUpperCase();
+  
+  // TOMBOL PDF TIDAK DIBERIKAN UNTUK ROLE TOKO DAN SALES
+  if (role === 'TOKO' || role === 'SALES') {
+    return false;
+  }
+
+  // TOMBOL PDF HANYA KELUAR JIKA DM JUGA SUDAH APPROVE (STATUS APPROVE ATAU DONE)
+  const isDmApproved = (req.status === 'APPROVE' || req.status === 'DONE');
+  return isDmApproved;
+}
+window.isPdfButtonAllowed = isPdfButtonAllowed;
+
+    const isPdfVisible = isPdfButtonAllowed(r);
+    if (isPdfVisible) {
       aksi += `
         <button class="btnIcon btnPdf" onclick="bukaPdfModal('${r.noSurat}')" title="CETAK PDF"><span class="material-symbols-rounded">picture_as_pdf</span></button>
       `;
@@ -5502,157 +5350,318 @@ function lihatFotoByNoSurat(noSurat) {
 }
 window.lihatFotoByNoSurat = lihatFotoByNoSurat;
 
-function approveService(noSurat) {
-  showConfirm(`APPROVE PERMINTAAN #${noSurat}?`, async () => {
-    try {
-      const requests = getRequestsFromDB();
-      const idx = requests.findIndex(r => r.noSurat === noSurat);
-      if (idx !== -1) {
-        requests[idx].serviceApprove = true;
-        requests[idx].serviceUserName = currentUser.fullName;
+let viewerCurrentZoom = 1;
+let viewerPanX = 0;
+let viewerPanY = 0;
+let isDraggingViewerImage = false;
+let startDragX = 0;
+let startDragY = 0;
+let initialPinchDistance = 0;
+let initialPinchZoom = 1;
 
-        const ttdMap = JSON.parse(appStorage.getItem(TTD_DB_KEY) || '{}');
-        const sig = ttdMap[currentUser.id] || ttdMap[currentUser.username] || ttdMap['SERVICE_' + currentUser.area] || ttdMap['SERVICE'] || '';
-        if (sig) {
-          requests[idx].serviceTTD = sig;
-        }
+function applyViewerTransform() {
+  const img = document.getElementById('viewerImage');
+  if (!img) return;
+  if (viewerCurrentZoom <= 1) {
+    viewerCurrentZoom = 1;
+    viewerPanX = 0;
+    viewerPanY = 0;
+  }
+  img.style.transform = `translate(${viewerPanX}px, ${viewerPanY}px) scale(${viewerCurrentZoom})`;
+  img.style.cursor = viewerCurrentZoom > 1 ? (isDraggingViewerImage ? 'grabbing' : 'grab') : 'pointer';
+}
 
-        if (!requests[idx].log) requests[idx].log = [];
-        requests[idx].log.push({
-          action: 'APPROVE_SERVICE',
-          user: currentUser.fullName,
-          notes: 'DISETUJUI SERVICE',
-          time: `${getFormattedDateDDMMYYYY()} ${new Date().toLocaleTimeString('id-ID')}`
-        });
-        saveRequestsToDB(requests);
+function zoomImage(delta) {
+  viewerCurrentZoom += delta;
+  if (viewerCurrentZoom < 1) viewerCurrentZoom = 1;
+  if (viewerCurrentZoom > 5) viewerCurrentZoom = 5;
+  applyViewerTransform();
+}
 
-        // 1. MUNCULKAN NOTIFIKASI LANGSUNG DI AWAL & PERBARUI TAMPILAN
-        showNotif(`APPROVE SERVICE BERHASIL!`, 'success');
-        loadRiwayat();
-        loadDashboard();
-        if (currentUser.category === 'SERVICE' && currentUser.area === 'TSM') loadMasterDbTable();
+function resetZoom() {
+  viewerCurrentZoom = 1;
+  viewerPanX = 0;
+  viewerPanY = 0;
+  applyViewerTransform();
+}
 
-        // 2. PROSES SINKRONISASI BERJALAN DI LATAR BELAKANG
-        const docId = String(noSurat).replace(/[\/\.]/g, '_');
-        if (typeof dbFirestore !== 'undefined' && dbFirestore) {
-          dbFirestore.collection('requests').doc(docId).set(requests[idx], { merge: true }).catch(e => console.warn(e));
-        }
-        if (typeof dbRealtime !== 'undefined' && dbRealtime) {
-          dbRealtime.ref(`requests/${docId}`).set(requests[idx]).catch(e => console.warn(e));
-        }
-        if (typeof pushCentralCloudDB === 'function') pushCentralCloudDB();
+function initPhotoViewerGestureListeners() {
+  const modal = document.getElementById('imageViewer');
+  const img = document.getElementById('viewerImage');
+  if (!modal || !img || modal.dataset.gesturesInited) return;
+  modal.dataset.gesturesInited = 'true';
 
-        executeGoogleSheetActionAndRefresh('saveRequest', { data: requests[idx] });
+  // Touch Start (Pinch or Pan)
+  modal.addEventListener('touchstart', (e) => {
+    if (e.target.closest('#navViewerLeft') || e.target.closest('#navViewerRight') || e.target.closest('.closeViewer') || e.target.closest('.viewerBottomBar')) {
+      return;
+    }
 
-        tambahNotifikasiSistem(['DM'], 'ALL', `PERMINTAAN #${noSurat} DISETUJUI SERVICE (${currentUser.fullName || currentUser.username}). MOHON APPROVAL DM.`, noSurat);
+    if (e.touches.length === 2) {
+      isDraggingViewerImage = false;
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      initialPinchDistance = Math.hypot(dx, dy);
+      initialPinchZoom = viewerCurrentZoom;
+    } else if (e.touches.length === 1 && viewerCurrentZoom > 1) {
+      isDraggingViewerImage = true;
+      startDragX = e.touches[0].clientX - viewerPanX;
+      startDragY = e.touches[0].clientY - viewerPanY;
+    }
+  }, { passive: false });
 
-        const users = getUsersFromDB();
-        const dmUsers = users.filter(u => u.category === 'DM');
-        dmUsers.forEach(dm => {
-          if (dm.phone && dm.phone !== '-') {
-            const dmName = dm.fullName || dm.username || 'Bapak/Ibu DM';
-            kirimNotifikasiWA(dm.phone,
-              `Yth. Bapak/Ibu ${dmName},\n\n` +
-              `Pemberitahuan Sistem Permintaan Barang:\n` +
-              `Pengajuan permintaan barang berikut telah DISETUJUI oleh Service (${currentUser.fullName || currentUser.username}):\n` +
-              `• Nomor Dokumen : #${noSurat}\n` +
-              `• Toko / Pemohon : ${requests[idx].toko} (${requests[idx].area})\n` +
-              `• Link Detail : ${getAppDirectLink(noSurat)}\n\n` +
-              `Mohon berkenan untuk melakukan peninjauan dan persetujuan (approval) tingkat DM melalui sistem aplikasi. Terima kasih.`
-            );
-          }
-        });
+  // Touch Move
+  modal.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2 && initialPinchDistance > 0) {
+      if (e.cancelable) e.preventDefault();
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 0) {
+        viewerCurrentZoom = initialPinchZoom * (dist / initialPinchDistance);
+        if (viewerCurrentZoom < 1) viewerCurrentZoom = 1;
+        if (viewerCurrentZoom > 5) viewerCurrentZoom = 5;
+        applyViewerTransform();
       }
-    } catch (err) {
-      console.error('[APPROVE SERVICE ERROR]:', err);
-      showNotif('GAGAL MEMPROSES APPROVAL SERVICE!', 'error');
+    } else if (e.touches.length === 1 && isDraggingViewerImage && viewerCurrentZoom > 1) {
+      if (e.cancelable) e.preventDefault();
+      viewerPanX = e.touches[0].clientX - startDragX;
+      viewerPanY = e.touches[0].clientY - startDragY;
+      applyViewerTransform();
+    }
+  }, { passive: false });
+
+  // Touch End
+  modal.addEventListener('touchend', (e) => {
+    if (e.touches.length < 2) {
+      initialPinchDistance = 0;
+    }
+    if (e.touches.length === 0) {
+      isDraggingViewerImage = false;
+    }
+  });
+
+  // Mouse Drag (PC/Laptop)
+  img.addEventListener('mousedown', (e) => {
+    if (viewerCurrentZoom > 1) {
+      isDraggingViewerImage = true;
+      startDragX = e.clientX - viewerPanX;
+      startDragY = e.clientY - viewerPanY;
+      applyViewerTransform();
+      e.preventDefault();
+    }
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (isDraggingViewerImage && viewerCurrentZoom > 1) {
+      viewerPanX = e.clientX - startDragX;
+      viewerPanY = e.clientY - startDragY;
+      applyViewerTransform();
+    }
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (isDraggingViewerImage) {
+      isDraggingViewerImage = false;
+      applyViewerTransform();
+    }
+  });
+
+  // Mouse Wheel Zoom
+  modal.addEventListener('wheel', (e) => {
+    if (e.target.closest('.viewerBottomBar')) return;
+    if (e.cancelable) e.preventDefault();
+    if (e.deltaY < 0) {
+      zoomImage(0.25);
+    } else {
+      zoomImage(-0.25);
+    }
+  }, { passive: false });
+}
+
+function tampilkanFotoViewerAktif() {
+  viewerCurrentZoom = 1;
+  viewerPanX = 0;
+  viewerPanY = 0;
+  applyViewerTransform();
+
+  const img = document.getElementById('viewerImage');
+  if (img && viewerPhotos.length > 0) {
+    img.src = viewerPhotos[viewerCurrentIndex];
+  }
+  const modal = document.getElementById('imageViewer');
+  if (modal) {
+    modal.style.display = 'flex';
+    initPhotoViewerGestureListeners();
+  }
+  
+  const btnLeft = document.getElementById('navViewerLeft');
+  const btnRight = document.getElementById('navViewerRight');
+  const textCounter = document.getElementById('viewerCounter');
+  
+  if (btnLeft) btnLeft.style.display = viewerPhotos.length > 1 ? 'flex' : 'none';
+  if (btnRight) btnRight.style.display = viewerPhotos.length > 1 ? 'flex' : 'none';
+  if (textCounter) textCounter.textContent = `${viewerCurrentIndex + 1} / ${viewerPhotos.length}`;
+}
+
+function gantiFotoViewer(arah) {
+  viewerCurrentIndex += arah;
+  if (viewerCurrentIndex < 0) {
+    viewerCurrentIndex = viewerPhotos.length - 1;
+  } else if (viewerCurrentIndex >= viewerPhotos.length) {
+    viewerCurrentIndex = 0;
+  }
+  tampilkanFotoViewerAktif();
+}
+
+function approveService(noSurat) {
+  showConfirm(`APPROVE PERMINTAAN #${noSurat}?`, () => {
+    const requests = getRequestsFromDB();
+    const idx = requests.findIndex(r => r && String(r.noSurat).trim().toUpperCase() === String(noSurat).trim().toUpperCase());
+    if (idx !== -1) {
+      requests[idx].serviceApprove = true;
+      requests[idx].serviceUserName = currentUser ? (currentUser.fullName || currentUser.username) : 'SERVICE';
+
+      const ttdMap = JSON.parse(appStorage.getItem(TTD_DB_KEY) || '{}');
+      const sig = ttdMap[currentUser.id] || ttdMap[currentUser.username] || ttdMap['SERVICE_' + currentUser.area] || ttdMap['SERVICE'] || '';
+      if (sig) {
+        requests[idx].serviceTTD = sig;
+      }
+
+      if (!requests[idx].log) requests[idx].log = [];
+      requests[idx].log.push({
+        action: 'APPROVE_SERVICE',
+        user: currentUser ? (currentUser.fullName || currentUser.username) : 'SERVICE',
+        notes: 'DISETUJUI SERVICE',
+        time: `${getFormattedDateDDMMYYYY()} ${new Date().toLocaleTimeString('id-ID')}`
+      });
+
+      // 1. SIMPAN LOKAL & UPDATE UI INSTAN (0 ms)
+      saveRequestsToDB(requests);
+      showNotif(`APPROVE BERHASIL`, 'info');
+      loadRiwayat();
+      loadDashboard();
+      if (currentUser && currentUser.category === 'SERVICE' && currentUser.area === 'TSM') loadMasterDbTable();
+
+      // 2. PROSES SYNC SUPABASE DI LATAR BELAKANG
+      const docId = String(noSurat).replace(/[\/\.]/g, '_');
+      if (typeof supabase !== 'undefined' && supabase) {
+        supabase.from('permintaan_toko').update({
+          service_approve: true,
+          service_user_name: requests[idx].serviceUserName,
+          service_ttd: requests[idx].serviceTTD || '',
+          status: requests[idx].status || 'PENDING',
+          log: requests[idx].log,
+          updated_at: new Date().toISOString()
+        }).eq('no_surat', noSurat).catch(e => console.warn(e));
+      }
+      if (typeof dbFirestore !== 'undefined' && dbFirestore) {
+        dbFirestore.collection('requests').doc(docId).set(requests[idx], { merge: true }).catch(e => console.warn(e));
+      }
+      if (typeof dbRealtime !== 'undefined' && dbRealtime) {
+        dbRealtime.ref(`requests/${docId}`).set(requests[idx]).catch(e => console.warn(e));
+      }
+
+      tambahNotifikasiSistem(['DM'], 'ALL', `PERMINTAAN #${noSurat} DISETUJUI SERVICE (${currentUser.fullName || currentUser.username}). MOHON APPROVAL DM.`, noSurat);
+
+      const users = getUsersFromDB();
+      const dmUsers = users.filter(u => u.category === 'DM');
+      dmUsers.forEach(dm => {
+        if (dm.phone && dm.phone !== '-') {
+          const dmName = dm.fullName || dm.username || 'Bapak/Ibu DM';
+          kirimNotifikasiWA(dm.phone,
+            `Yth. Bapak/Ibu ${dmName},\n\n` +
+            `Pemberitahuan Sistem Permintaan Barang:\n` +
+            `Pengajuan permintaan barang berikut telah DISETUJUI oleh Service (${currentUser.fullName || currentUser.username}):\n` +
+            `• Nomor Dokumen : #${noSurat}\n` +
+            `• Toko / Pemohon : ${requests[idx].toko} (${requests[idx].area})\n` +
+            `• Link Detail : ${getAppDirectLink(noSurat)}\n\n` +
+            `Mohon berkenan untuk melakukan peninjauan dan persetujuan (approval) tingkat DM melalui sistem aplikasi. Terima kasih.`
+          );
+        }
+      });
     }
   });
 }
 
 function approveDM(noSurat) {
   const requests = getRequestsFromDB();
-  const req = requests.find(r => r.noSurat === noSurat);
+  const req = requests.find(r => r && String(r.noSurat).trim().toUpperCase() === String(noSurat).trim().toUpperCase());
   if (req && !req.serviceApprove) {
     showNotif('PERMINTAAN WAJIB DI-APPROVE OLEH SERVICE TERLEBIH DAHULU SEBELUM DM DAPAT MEMPROSES APPROVAL!', 'warning');
     return;
   }
 
-  showConfirm(`APPROVE PERMINTAAN #${noSurat}?`, async () => {
-    try {
-      const requests = getRequestsFromDB();
-      const idx = requests.findIndex(r => r.noSurat === noSurat);
-      if (idx !== -1) {
-        if (!requests[idx].serviceApprove) {
-          showNotif('PERMINTAAN WAJIB DI-APPROVE OLEH SERVICE TERLEBIH DAHULU!', 'warning');
-          return;
-        }
-        requests[idx].status = 'APPROVE';
-        requests[idx].dmUserName = currentUser.fullName;
-
-        const ttdMap = JSON.parse(appStorage.getItem(TTD_DB_KEY) || '{}');
-        const sig = ttdMap[currentUser.id] || ttdMap[currentUser.username] || ttdMap['DM'] || '';
-        if (sig) {
-          requests[idx].dmTTD = sig;
-        }
-
-        if (!requests[idx].log) requests[idx].log = [];
-        requests[idx].log.push({
-          action: 'APPROVE_DM',
-          user: currentUser.fullName,
-          notes: 'DISETUJUI DM',
-          time: `${getFormattedDateDDMMYYYY()} ${new Date().toLocaleTimeString('id-ID')}`
-        });
-        saveRequestsToDB(requests);
-
-        // 1. MUNCULKAN NOTIFIKASI LANGSUNG DI AWAL & PERBARUI TAMPILAN
-        showNotif(`APPROVE DM BERHASIL!`, 'success');
-        loadRiwayat();
-        loadDashboard();
-        if (currentUser.category === 'SERVICE' && currentUser.area === 'TSM') loadMasterDbTable();
-        if (typeof updateNotifBellCounter === 'function') updateNotifBellCounter();
-        if (typeof cekUnreadNotif === 'function') cekUnreadNotif();
-
-        // 2. PROSES SINKRONISASI BERJALAN DI LATAR BELAKANG
-        const docId = String(noSurat).replace(/[\/\.]/g, '_');
-        if (typeof dbFirestore !== 'undefined' && dbFirestore) {
-          dbFirestore.collection('requests').doc(docId).set(requests[idx], { merge: true }).catch(e => console.warn(e));
-        }
-        if (typeof dbRealtime !== 'undefined' && dbRealtime) {
-          dbRealtime.ref(`requests/${docId}`).set(requests[idx]).catch(e => console.warn(e));
-        }
-        if (typeof pushCentralCloudDB === 'function') pushCentralCloudDB();
-
-        executeGoogleSheetActionAndRefresh('saveRequest', { data: requests[idx] });
-
-        tambahNotifikasiSistem(['SERVICE', 'TOKO', 'SALES'], requests[idx].area, `PERMINTAAN #${noSurat} DARI ${requests[idx].toko} TELAH DISETUJUI DM. SILAKAN DIPROSES.`, noSurat);
-        const users = getUsersFromDB();
-        const serviceUsers = users.filter(u => u.category === 'SERVICE' && (u.area === requests[idx].area || u.area === 'ALL'));
-        serviceUsers.forEach(srv => {
-          if (srv.phone && srv.phone !== '-') {
-            const srvName = srv.fullName || srv.username || 'Bapak/Ibu Tim Service';
-            kirimNotifikasiWA(srv.phone,
-              `Yth. Bapak/Ibu ${srvName},\n\n` +
-              `Pemberitahuan Sistem Permintaan Barang:\n` +
-              `Pengajuan permintaan barang berikut telah DISETUJUI OLEH DM:\n` +
-              `• Nomor Dokumen : #${noSurat}\n` +
-              `• Toko / Pemohon : ${requests[idx].toko} (${requests[idx].area})\n` +
-              `• Status : DISETUJUI (APPROVE)\n` +
-              `• Link Detail : ${getAppDirectLink(noSurat)}\n\n` +
-              `Dokumen saat ini siap diproses oleh Tim Service. Terima kasih atas kerja samanya.`
-            );
-          }
-        });
-
-        loadRiwayat();
-        loadDashboard();
-        if (currentUser.category === 'SERVICE' && currentUser.area === 'TSM') loadMasterDbTable();
-        if (typeof updateNotifBellCounter === 'function') updateNotifBellCounter();
-        if (typeof cekUnreadNotif === 'function') cekUnreadNotif();
+  showConfirm(`APPROVE PERMINTAAN #${noSurat}?`, () => {
+    const requests = getRequestsFromDB();
+    const idx = requests.findIndex(r => r && String(r.noSurat).trim().toUpperCase() === String(noSurat).trim().toUpperCase());
+    if (idx !== -1) {
+      if (!requests[idx].serviceApprove) {
+        showNotif('PERMINTAAN WAJIB DI-APPROVE OLEH SERVICE TERLEBIH DAHULU!', 'warning');
+        return;
       }
-    } catch (err) {
-      console.error('[APPROVE DM ERROR]:', err);
-      showNotif('GAGAL MEMPROSES APPROVAL DM!', 'error');
+      requests[idx].status = 'APPROVE';
+      requests[idx].dmUserName = currentUser ? (currentUser.fullName || currentUser.username) : 'DM';
+
+      const ttdMap = JSON.parse(appStorage.getItem(TTD_DB_KEY) || '{}');
+      const sig = ttdMap[currentUser.id] || ttdMap[currentUser.username] || ttdMap['DM'] || '';
+      if (sig) {
+        requests[idx].dmTTD = sig;
+      }
+
+      if (!requests[idx].log) requests[idx].log = [];
+      requests[idx].log.push({
+        action: 'APPROVE_DM',
+        user: currentUser ? (currentUser.fullName || currentUser.username) : 'DM',
+        notes: 'DISETUJUI DM',
+        time: `${getFormattedDateDDMMYYYY()} ${new Date().toLocaleTimeString('id-ID')}`
+      });
+
+      // 1. SIMPAN LOKAL & UPDATE UI INSTAN (0 ms)
+      saveRequestsToDB(requests);
+      showNotif(`APPROVE BERHASIL`, 'info');
+      loadRiwayat();
+      loadDashboard();
+      if (currentUser && currentUser.category === 'SERVICE' && currentUser.area === 'TSM') loadMasterDbTable();
+      if (typeof updateNotifBellCounter === 'function') updateNotifBellCounter();
+      if (typeof cekUnreadNotif === 'function') cekUnreadNotif();
+
+      // 2. PROSES SYNC SUPABASE DI LATAR BELAKANG
+      const docId = String(noSurat).replace(/[\/\.]/g, '_');
+      if (typeof supabase !== 'undefined' && supabase) {
+        supabase.from('permintaan_toko').update({
+          status: 'APPROVE',
+          dm_user_name: requests[idx].dmUserName,
+          dm_ttd: requests[idx].dmTTD || '',
+          log: requests[idx].log,
+          updated_at: new Date().toISOString()
+        }).eq('no_surat', noSurat).catch(e => console.warn(e));
+      }
+      if (typeof dbFirestore !== 'undefined' && dbFirestore) {
+        dbFirestore.collection('requests').doc(docId).set(requests[idx], { merge: true }).catch(e => console.warn(e));
+      }
+      if (typeof dbRealtime !== 'undefined' && dbRealtime) {
+        dbRealtime.ref(`requests/${docId}`).set(requests[idx]).catch(e => console.warn(e));
+      }
+
+      tambahNotifikasiSistem(['SERVICE', 'TOKO', 'SALES'], requests[idx].area, `PERMINTAAN #${noSurat} DARI ${requests[idx].toko} TELAH DISETUJUI DM. SILAKAN DIPROSES.`, noSurat);
+      const users = getUsersFromDB();
+      const serviceUsers = users.filter(u => u.category === 'SERVICE' && (u.area === requests[idx].area || u.area === 'ALL'));
+      serviceUsers.forEach(srv => {
+        if (srv.phone && srv.phone !== '-') {
+          const srvName = srv.fullName || srv.username || 'Bapak/Ibu Tim Service';
+          kirimNotifikasiWA(srv.phone,
+            `Yth. Bapak/Ibu ${srvName},\n\n` +
+            `Pemberitahuan Sistem Permintaan Barang:\n` +
+            `Pengajuan permintaan barang berikut telah DISETUJUI OLEH DM:\n` +
+            `• Nomor Dokumen : #${noSurat}\n` +
+            `• Toko / Pemohon : ${requests[idx].toko} (${requests[idx].area})\n` +
+            `• Status : DISETUJUI (APPROVE)\n` +
+            `• Link Detail : ${getAppDirectLink(noSurat)}\n\n` +
+            `Dokumen saat ini siap diproses oleh Tim Service. Terima kasih atas kerja samanya.`
+          );
+        }
+      });
     }
   });
 }
@@ -5821,7 +5830,7 @@ function prosesSimpanDoneDenganBuktiArtemis() {
     return;
   }
 
-  showConfirm(`SELESAIKAN PERMINTAAN #${noSurat} DAN SIMPAN BUKTI PROSES ARTEMIS?`, async () => {
+  showConfirm(`SELESAIKAN PERMINTAAN #${noSurat} DAN SIMPAN BUKTI PROSES ARTEMIS?`, () => {
     try {
       const requests = getRequestsFromDB();
       const idx = requests.findIndex(r => r && (r.noSurat === noSurat || String(r.noSurat) === String(noSurat) || r.id === noSurat));
@@ -5843,37 +5852,40 @@ function prosesSimpanDoneDenganBuktiArtemis() {
           time: `${getFormattedDateDDMMYYYY()} ${new Date().toLocaleTimeString('id-ID')}`
         });
 
+        // 1. SIMPAN LOKAL & UPDATE UI INSTAN (0 ms)
         saveRequestsToDB(requests);
-
         closeArtemisModal();
-
-        // 1. MUNCULKAN NOTIFIKASI LANGSUNG DI AWAL & PERBARUI TAMPILAN
         showNotif(`PERMINTAAN #${noSurat} TELAH SELESAI (DONE) & BUKTI FOTO ARTEMIS DISIMPAN!`, 'success');
+        tambahNotifikasiSistem(['TOKO', 'SALES', 'DM'], requests[idx].area, `PERMINTAAN #${noSurat} DARI ${requests[idx].toko} TELAH SELESAI (DONE) DENGAN BUKTI PROSES ARTEMIS.`, noSurat);
         loadRiwayat();
         loadDashboard();
         if (currentUser && currentUser.category === 'SERVICE' && currentUser.area === 'TSM') {
           if (typeof loadMasterDbTable === 'function') loadMasterDbTable();
         }
 
-        // 2. PROSES SINKRONISASI BERJALAN DI LATAR BELAKANG
+        // 2. PROSES SYNC SUPABASE DI LATAR BELAKANG
         const docId = String(noSurat).replace(/[\/\.]/g, '_');
+        if (typeof supabase !== 'undefined' && supabase) {
+          supabase.from('permintaan_toko').update({
+            status: 'DONE',
+            photos: requests[idx].photos,
+            artemis_photos: tempArtemisPhotos,
+            log: requests[idx].log,
+            updated_at: new Date().toISOString()
+          }).eq('no_surat', noSurat).catch(e => console.warn(e));
+        }
         if (typeof dbFirestore !== 'undefined' && dbFirestore) {
           dbFirestore.collection('requests').doc(docId).set(requests[idx], { merge: true }).catch(e => console.warn(e));
         }
         if (typeof dbRealtime !== 'undefined' && dbRealtime) {
           dbRealtime.ref(`requests/${docId}`).set(requests[idx]).catch(e => console.warn(e));
         }
-        if (typeof pushCentralCloudDB === 'function') pushCentralCloudDB();
-
-        executeGoogleSheetActionAndRefresh('saveRequest', { data: requests[idx] });
-
-        tambahNotifikasiSistem(['TOKO', 'SALES', 'DM'], requests[idx].area, `PERMINTAAN #${noSurat} DARI ${requests[idx].toko} TELAH SELESAI (DONE) DENGAN BUKTI PROSES ARTEMIS.`, noSurat);
       } else {
         showNotif('DATA PERMINTAAN TIDAK DITEMUKAN!', 'warning');
       }
     } catch (err) {
       console.error(err);
-      showNotif('GAGAL MENYIMPAN STATUS DONE KE CLOUD', 'danger');
+      showNotif('GAGAL MENYIMPAN STATUS DONE: ' + (err.message || err), 'danger');
     }
   });
 }
@@ -5887,46 +5899,46 @@ function batalApproveService(noSurat) {
     return;
   }
 
-  showConfirm(`BATALKAN APPROVAL SERVICE UNTUK PERMINTAAN #${noSurat}?`, async () => {
-    try {
-      const requests = getRequestsFromDB();
-      const idx = requests.findIndex(r => r.noSurat === noSurat);
-      if (idx !== -1) {
-        requests[idx].serviceApprove = false;
-        requests[idx].serviceUserName = '';
-        requests[idx].serviceTTD = '';
-        requests[idx].status = 'PENDING';
+  showConfirm(`BATALKAN APPROVAL SERVICE UNTUK PERMINTAAN #${noSurat}?`, () => {
+    const requests = getRequestsFromDB();
+    const idx = requests.findIndex(r => r && String(r.noSurat).trim().toUpperCase() === String(noSurat).trim().toUpperCase());
+    if (idx !== -1) {
+      requests[idx].serviceApprove = false;
+      requests[idx].serviceUserName = '';
+      requests[idx].serviceTTD = '';
+      requests[idx].status = 'PENDING';
 
-        if (!requests[idx].log) requests[idx].log = [];
-        requests[idx].log.push({
-          action: 'BATAL_APPROVE_SERVICE',
-          user: currentUser ? currentUser.fullName : 'ADMIN',
-          notes: 'BATAL APPROVAL SERVICE',
-          time: `${getFormattedDateDDMMYYYY()} ${new Date().toLocaleTimeString('id-ID')}`
-        });
+      if (!requests[idx].log) requests[idx].log = [];
+      requests[idx].log.push({
+        action: 'BATAL_APPROVE_SERVICE',
+        user: currentUser ? currentUser.fullName : 'ADMIN',
+        notes: 'BATAL APPROVAL SERVICE',
+        time: `${getFormattedDateDDMMYYYY()} ${new Date().toLocaleTimeString('id-ID')}`
+      });
 
-        saveRequestsToDB(requests);
+      saveRequestsToDB(requests);
+      showNotif(`BERHASIL MEMBATALKAN APPROVAL SERVICE #${noSurat}!`, 'info');
+      loadRiwayat();
+      loadDashboard();
+      if (typeof loadMasterDbTable === 'function') loadMasterDbTable();
 
-        // 1. MUNCULKAN NOTIFIKASI LANGSUNG DI AWAL & PERBARUI TAMPILAN
-        showNotif(`BERHASIL MEMBATALKAN APPROVAL SERVICE #${noSurat}!`, 'info');
-        loadRiwayat();
-        loadDashboard();
-        if (typeof loadMasterDbTable === 'function') loadMasterDbTable();
-
-        // 2. PROSES SINKRONISASI BERJALAN DI LATAR BELAKANG
-        const docId = String(noSurat).replace(/[\/\.]/g, '_');
-        if (typeof dbFirestore !== 'undefined' && dbFirestore) {
-          dbFirestore.collection('requests').doc(docId).set(requests[idx], { merge: true }).catch(e => console.warn(e));
-        }
-        if (typeof dbRealtime !== 'undefined' && dbRealtime) {
-          dbRealtime.ref(`requests/${docId}`).set(requests[idx]).catch(e => console.warn(e));
-        }
-
-        executeGoogleSheetActionAndRefresh('saveRequest', { data: requests[idx] });
+      const docId = String(noSurat).replace(/[\/\.]/g, '_');
+      if (typeof supabase !== 'undefined' && supabase) {
+        supabase.from('permintaan_toko').update({
+          service_approve: false,
+          service_user_name: '',
+          service_ttd: '',
+          status: 'PENDING',
+          log: requests[idx].log,
+          updated_at: new Date().toISOString()
+        }).eq('no_surat', noSurat).catch(e => console.warn(e));
       }
-    } catch (err) {
-      console.error(err);
-      showNotif('GAGAL MEMBATALKAN APPROVAL SERVICE', 'error');
+      if (typeof dbFirestore !== 'undefined' && dbFirestore) {
+        dbFirestore.collection('requests').doc(docId).set(requests[idx], { merge: true }).catch(e => console.warn(e));
+      }
+      if (typeof dbRealtime !== 'undefined' && dbRealtime) {
+        dbRealtime.ref(`requests/${docId}`).set(requests[idx]).catch(e => console.warn(e));
+      }
     }
   });
 }
@@ -5940,46 +5952,45 @@ function batalApproveDM(noSurat) {
     return;
   }
 
-  showConfirm(`BATALKAN APPROVAL DM UNTUK PERMINTAAN #${noSurat}?`, async () => {
-    try {
-      const requests = getRequestsFromDB();
-      const idx = requests.findIndex(r => r.noSurat === noSurat);
-      if (idx !== -1) {
-        requests[idx].dmApprove = false;
-        requests[idx].dmUserName = '';
-        requests[idx].dmTTD = '';
-        requests[idx].status = 'PENDING';
+  showConfirm(`BATALKAN APPROVAL DM UNTUK PERMINTAAN #${noSurat}?`, () => {
+    const requests = getRequestsFromDB();
+    const idx = requests.findIndex(r => r && String(r.noSurat).trim().toUpperCase() === String(noSurat).trim().toUpperCase());
+    if (idx !== -1) {
+      requests[idx].dmApprove = false;
+      requests[idx].dmUserName = '';
+      requests[idx].dmTTD = '';
+      requests[idx].status = 'PENDING';
 
-        if (!requests[idx].log) requests[idx].log = [];
-        requests[idx].log.push({
-          action: 'BATAL_APPROVE_DM',
-          user: currentUser ? currentUser.fullName : 'ADMIN',
-          notes: 'BATAL APPROVAL DM',
-          time: `${getFormattedDateDDMMYYYY()} ${new Date().toLocaleTimeString('id-ID')}`
-        });
+      if (!requests[idx].log) requests[idx].log = [];
+      requests[idx].log.push({
+        action: 'BATAL_APPROVE_DM',
+        user: currentUser ? currentUser.fullName : 'ADMIN',
+        notes: 'BATAL APPROVAL DM',
+        time: `${getFormattedDateDDMMYYYY()} ${new Date().toLocaleTimeString('id-ID')}`
+      });
 
-        saveRequestsToDB(requests);
+      saveRequestsToDB(requests);
+      showNotif(`BERHASIL MEMBATALKAN APPROVAL DM #${noSurat}!`, 'info');
+      loadRiwayat();
+      loadDashboard();
+      if (typeof loadMasterDbTable === 'function') loadMasterDbTable();
 
-        // 1. MUNCULKAN NOTIFIKASI LANGSUNG DI AWAL & PERBARUI TAMPILAN
-        showNotif(`BERHASIL MEMBATALKAN APPROVAL DM #${noSurat}!`, 'info');
-        loadRiwayat();
-        loadDashboard();
-        if (typeof loadMasterDbTable === 'function') loadMasterDbTable();
-
-        // 2. PROSES SINKRONISASI BERJALAN DI LATAR BELAKANG
-        const docId = String(noSurat).replace(/[\/\.]/g, '_');
-        if (typeof dbFirestore !== 'undefined' && dbFirestore) {
-          dbFirestore.collection('requests').doc(docId).set(requests[idx], { merge: true }).catch(e => console.warn(e));
-        }
-        if (typeof dbRealtime !== 'undefined' && dbRealtime) {
-          dbRealtime.ref(`requests/${docId}`).set(requests[idx]).catch(e => console.warn(e));
-        }
-
-        executeGoogleSheetActionAndRefresh('saveRequest', { data: requests[idx] });
+      const docId = String(noSurat).replace(/[\/\.]/g, '_');
+      if (typeof supabase !== 'undefined' && supabase) {
+        supabase.from('permintaan_toko').update({
+          status: 'PENDING',
+          dm_user_name: '',
+          dm_ttd: '',
+          log: requests[idx].log,
+          updated_at: new Date().toISOString()
+        }).eq('no_surat', noSurat).catch(e => console.warn(e));
       }
-    } catch (err) {
-      console.error(err);
-      showNotif('GAGAL MEMBATALKAN APPROVAL DM', 'error');
+      if (typeof dbFirestore !== 'undefined' && dbFirestore) {
+        dbFirestore.collection('requests').doc(docId).set(requests[idx], { merge: true }).catch(e => console.warn(e));
+      }
+      if (typeof dbRealtime !== 'undefined' && dbRealtime) {
+        dbRealtime.ref(`requests/${docId}`).set(requests[idx]).catch(e => console.warn(e));
+      }
     }
   });
 }
@@ -6017,63 +6028,76 @@ function kirimReject() {
   }
 
   closeReject();
-  showConfirm(`TOLAK PERMINTAAN #${noSurat} DENGAN ALASAN: "${alasan}"?`, async () => {
-    try {
-      const requests = getRequestsFromDB();
-      const idx = requests.findIndex(r => r.noSurat === noSurat);
-      if (idx !== -1) {
-        requests[idx].status = 'REJECT';
-        requests[idx].catatan = `DITOLAK ${roleType}: ${alasan}`;
-        if (!requests[idx].log) requests[idx].log = [];
-        requests[idx].log.push({
-          action: `REJECT_${roleType}`,
-          user: currentUser.fullName,
-          notes: alasan,
-          time: `${getFormattedDateDDMMYYYY()} ${new Date().toLocaleTimeString('id-ID')}`
-        });
-        saveRequestsToDB(requests);
+  const requests = getRequestsFromDB();
+  const idx = requests.findIndex(r => r && String(r.noSurat).trim().toUpperCase() === String(noSurat).trim().toUpperCase());
+  if (idx !== -1) {
+    requests[idx].status = 'REJECT';
+    requests[idx].catatan = `DITOLAK ${roleType}: ${alasan}`;
+    if (!requests[idx].log) requests[idx].log = [];
+    requests[idx].log.push({
+      action: `REJECT_${roleType}`,
+      user: currentUser ? (currentUser.fullName || currentUser.username) : 'ADMIN',
+      notes: alasan,
+      time: `${getFormattedDateDDMMYYYY()} ${new Date().toLocaleTimeString('id-ID')}`
+    });
 
-        // 1. MUNCULKAN NOTIFIKASI LANGSUNG DI AWAL & PERBARUI TAMPILAN
-        showNotif(`PERMINTAAN BERHASIL DITOLAK`, 'info');
-        loadRiwayat();
-        loadDashboard();
+    // 1. SIMPAN LOKAL & UPDATE UI INSTAN (0 ms)
+    saveRequestsToDB(requests);
+    showNotif(`PERMINTAAN BERHASIL DITOLAK`, 'info');
+    loadRiwayat();
+    loadDashboard();
+    if (typeof loadMasterDbTable === 'function') loadMasterDbTable();
 
-        // 2. PROSES SINKRONISASI BERJALAN DI LATAR BELAKANG
-        const docId = String(noSurat).replace(/[\/\.]/g, '_');
-        if (typeof dbFirestore !== 'undefined' && dbFirestore) {
-          dbFirestore.collection('requests').doc(docId).set(requests[idx], { merge: true }).catch(e => console.warn(e));
-        }
-        if (typeof dbRealtime !== 'undefined' && dbRealtime) {
-          dbRealtime.ref(`requests/${docId}`).set(requests[idx]).catch(e => console.warn(e));
-        }
-
-        executeGoogleSheetActionAndRefresh('saveRequest', { data: requests[idx] });
-
-        const users = getUsersFromDB();
-        const creator = users.find(u => u.id === requests[idx].userId || u.fullName === requests[idx].createdBy);
-        if (creator && creator.phone && creator.phone !== '-') {
-          kirimNotifikasiWA(creator.phone,
-            `Pemberitahuan Sistem Permintaan Barang:\n\n` +
-            `Permintaan #${noSurat} (${requests[idx].toko}) DITOLAK oleh ${roleType}.\n` +
-            `Alasan: ${alasan}`
-          );
-        }
-
-        if (roleType === 'SERVICE') {
-          tambahNotifikasiSistem(['TOKO', 'SALES'], requests[idx].area, `PERMINTAAN #${noSurat} DITOLAK SERVICE. CATATAN: ${alasan}`, noSurat);
-        } else if (roleType === 'DM') {
-          tambahNotifikasiSistem(['SERVICE', 'TOKO', 'SALES'], requests[idx].area, `PERMINTAAN #${noSurat} DARI ${requests[idx].toko} DITOLAK DM. CATATAN: ${alasan}`, noSurat);
-        }
-
-        loadRiwayat();
-        loadDashboard();
-        if (typeof loadMasterDbTable === 'function') loadMasterDbTable();
-      }
-    } catch (err) {
-      console.error(err);
-      showNotif('GAGAL MENOLAK PERMINTAAN', 'error');
+    // 2. PROSES SYNC SUPABASE DI LATAR BELAKANG
+    const docId = String(noSurat).replace(/[\/\.]/g, '_');
+    if (typeof supabase !== 'undefined' && supabase) {
+      supabase.from('permintaan_toko').update({
+        status: 'REJECT',
+        catatan: requests[idx].catatan,
+        log: requests[idx].log,
+        updated_at: new Date().toISOString()
+      }).eq('no_surat', noSurat).catch(e => console.warn(e));
     }
-  });
+    if (typeof dbFirestore !== 'undefined' && dbFirestore) {
+      dbFirestore.collection('requests').doc(docId).set(requests[idx], { merge: true }).catch(e => console.warn(e));
+    }
+    if (typeof dbRealtime !== 'undefined' && dbRealtime) {
+      dbRealtime.ref(`requests/${docId}`).set(requests[idx]).catch(e => console.warn(e));
+    }
+
+    const users = getUsersFromDB();
+    const creator = users.find(u => u && (u.id === requests[idx].userId || u.fullName === requests[idx].createdBy));
+
+    if (roleType === 'SERVICE') {
+      tambahNotifikasiSistem(['TOKO', 'SALES'], requests[idx].area, `PERMINTAAN #${noSurat} DITOLAK SERVICE. CATATAN: ${alasan}`, noSurat);
+      if (creator && creator.phone) {
+        kirimNotifikasiWA(creator.phone,
+          `Yth. Bapak/Ibu,\n\n` +
+          `Pemberitahuan Sistem Permintaan Barang:\n` +
+          `Pengajuan permintaan barang berikut DITOLAK oleh Tim Service:\n` +
+          `• Nomor Dokumen : #${noSurat}\n` +
+          `• Toko / Pemohon : ${requests[idx].toko} (${requests[idx].area})\n` +
+          `• Catatan / Alasan : ${alasan}\n` +
+          `• Link Detail : ${getAppDirectLink(noSurat)}\n\n` +
+          `Silakan periksa kembali rincian dokumen pada sistem aplikasi. Terima kasih.`
+        );
+      }
+    } else if (roleType === 'DM') {
+      tambahNotifikasiSistem(['SERVICE', 'TOKO', 'SALES'], requests[idx].area, `PERMINTAAN #${noSurat} DARI ${requests[idx].toko} DITOLAK DM. CATATAN: ${alasan}`, noSurat);
+      if (creator && creator.phone) {
+        kirimNotifikasiWA(creator.phone,
+          `Yth. Bapak/Ibu,\n\n` +
+          `Pemberitahuan Sistem Permintaan Barang:\n` +
+          `Pengajuan permintaan barang berikut DITOLAK oleh DM Pusat:\n` +
+          `• Nomor Dokumen : #${noSurat}\n` +
+          `• Toko / Pemohon : ${requests[idx].toko} (${requests[idx].area})\n` +
+          `• Catatan / Alasan : ${alasan}\n` +
+          `• Link Detail : ${getAppDirectLink(noSurat)}\n\n` +
+          `Silakan periksa kembali rincian dokumen pada sistem aplikasi. Terima kasih.`
+        );
+      }
+    }
+  }
 }
 
 function editPermintaan(noSurat) {
@@ -6153,41 +6177,51 @@ window.editPermintaan = editPermintaan;
 
 function hapusData(noSurat) {
   if (!noSurat) return;
-  showConfirm(`APAKAH ANDA YAKIN INGIN MENGHAPUS BARIS DATA PERMINTAAN #${noSurat} INI?`, async () => {
+  showConfirm(`APAKAH ANDA YAKIN INGIN MENGHAPUS PERMINTAAN #${noSurat} INI?`, () => {
     try {
-      // 1. DOKUMENTASIKAN KODE SURAT PADA DELETED_REQUESTS_KEY
-      try {
-        const delReqs = JSON.parse(appStorage.getItem(DELETED_REQUESTS_KEY) || '[]');
-        if (!delReqs.includes(noSurat)) {
-          delReqs.push(noSurat);
-          appStorage.setItem(DELETED_REQUESTS_KEY, JSON.stringify(delReqs));
-        }
-      } catch(e) {}
-
-      // 2. FILTER DARI CACHE LOKAL & SIMPAN
       const currentReqs = getRequestsFromDB();
-      const updatedReqs = currentReqs.filter(r => r && String(r.noSurat).trim().toUpperCase() !== String(noSurat).trim().toUpperCase());
-      saveRequestsToDB(updatedReqs);
+      const idx = currentReqs.findIndex(r => r && String(r.noSurat).trim().toUpperCase() === String(noSurat).trim().toUpperCase());
+      if (idx !== -1) {
+        currentReqs[idx].status = 'BATAL';
+        currentReqs[idx].unfulfilled = true;
+        if (Array.isArray(currentReqs[idx].items)) {
+          currentReqs[idx].items.forEach(i => i.unfulfilled = true);
+        }
+        if (!currentReqs[idx].log) currentReqs[idx].log = [];
+        currentReqs[idx].log.push({
+          action: 'TIDAK_DIPENUHI',
+          user: currentUser ? (currentUser.fullName || currentUser.username) : 'USER',
+          notes: 'HAPUS PERMINTAAN',
+          time: `${getFormattedDateDDMMYYYY()} ${new Date().toLocaleTimeString('id-ID')}`
+        });
 
-      // 3. MUNCULKAN NOTIFIKASI LANGSUNG DI AWAL & PERBARUI TAMPILAN
-      showNotif(`PERMINTAAN #${noSurat} BERHASIL DIHAPUS!`, 'info');
-      if (typeof loadRiwayat === 'function') loadRiwayat();
-      if (typeof loadDashboard === 'function') loadDashboard();
-      if (typeof loadMasterDbTable === 'function') loadMasterDbTable();
+        // 1. SIMPAN LOKAL SECARA INSTAN (0 ms)
+        saveRequestsToDB(currentReqs);
+        showNotif(`PERMINTAAN #${noSurat} BERHASIL DIHAPUS!`, 'warning');
+        if (typeof loadRiwayat === 'function') loadRiwayat();
+        if (typeof loadDashboard === 'function') loadDashboard();
+        if (typeof loadMasterDbTable === 'function') loadMasterDbTable();
 
-      // 4. PROSES SINKRONISASI BERJALAN DI LATAR BELAKANG
-      const docId = String(noSurat).replace(/[\/\.]/g, '_');
-      if (typeof dbFirestore !== 'undefined' && dbFirestore) {
-        dbFirestore.collection('requests').doc(docId).delete().catch(err => console.warn('[FIRESTORE DELETE NOTICE]:', err));
+        // 2. PROSES SYNC SUPABASE DI LATAR BELAKANG
+        const docId = String(noSurat).replace(/[\/\.]/g, '_');
+        if (typeof supabase !== 'undefined' && supabase) {
+          supabase.from('permintaan_toko').update({
+            status: 'BATAL',
+            items: currentReqs[idx].items,
+            log: currentReqs[idx].log,
+            updated_at: new Date().toISOString()
+          }).eq('no_surat', noSurat).catch(e => console.warn(e));
+        }
+        if (typeof dbFirestore !== 'undefined' && dbFirestore) {
+          dbFirestore.collection('requests').doc(docId).set(currentReqs[idx], { merge: true }).catch(e => console.warn(e));
+        }
+        if (typeof dbRealtime !== 'undefined' && dbRealtime) {
+          dbRealtime.ref(`requests/${docId}`).set(currentReqs[idx]).catch(e => console.warn(e));
+        }
       }
-      if (typeof dbRealtime !== 'undefined' && dbRealtime) {
-        dbRealtime.ref(`requests/${docId}`).remove().catch(err => console.warn('[REALTIME DELETE NOTICE]:', err));
-      }
-
-      executeGoogleSheetActionAndRefresh('deleteRequest', { noSurat: noSurat });
     } catch (err) {
       console.error('[HAPUS DATA ERROR]:', err);
-      showNotif('GAGAL MENGHAPUS DATA PERMINTAAN: ' + (err.message || err), 'error');
+      showNotif('GAGAL MENGHAPUS PERMINTAAN: ' + (err.message || err), 'error');
     }
   });
 }
@@ -6300,43 +6334,59 @@ function simpanPerubahanDetailAdmin(noSurat) {
     return;
   }
 
-  showConfirm(`APAKAH ANDA YAKIN INGIN MENYIMPAN PERUBAHAN ITEM PERMINTAAN #${noSurat} KE CLOUD?`, async () => {
-    try {
-      const requests = getRequestsFromDB();
-      const req = requests.find(r => r && (r.noSurat === noSurat || String(r.noSurat) === String(noSurat) || r.id === noSurat));
-      if (!req) {
-        showNotif('DATA PERMINTAAN TIDAK DITEMUKAN!', 'warning');
-        return;
-      }
+  showConfirm(`APAKAH ANDA YAKIN INGIN MENYIMPAN PERUBAHAN ITEM PERMINTAAN #${noSurat} KE CLOUD?`, () => {
+    showLoading('MENYIMPAN PERUBAHAN ITEM KE CLOUD...');
+    setTimeout(async () => {
+      try {
+        const requests = getRequestsFromDB();
+        const req = requests.find(r => r && (r.noSurat === noSurat || String(r.noSurat) === String(noSurat) || r.id === noSurat));
+        if (!req) {
+          hideLoading();
+          showNotif('DATA PERMINTAAN TIDAK DITEMUKAN!', 'warning');
+          return;
+        }
 
-      const docId = String(noSurat).replace(/[\/\.]/g, '_');
-      if (typeof dbFirestore !== 'undefined' && dbFirestore) {
-        dbFirestore.collection('requests').doc(docId).set(req, { merge: true }).catch(e => console.warn(e));
-      }
-      if (typeof dbRealtime !== 'undefined' && dbRealtime) {
-        dbRealtime.ref(`requests/${docId}`).set(req).catch(e => console.warn(e));
-      }
-      if (typeof pushCentralCloudDB === 'function') {
-        pushCentralCloudDB();
-      }
-      isItemModifiedMap[noSurat] = false;
+        if (typeof supabase !== 'undefined' && supabase) {
+          try {
+            const { error: err1 } = await supabase.from('permintaan_toko').update({
+              items: req.items
+            }).eq('no_surat', noSurat);
+            if (err1) {
+              await supabase.from('permintaan_toko').update({
+                items: req.items
+              }).eq('id', req.id || noSurat);
+            }
+          } catch (e) {
+            console.error("Supabase update error:", e);
+          }
+        }
 
-      // KIRIM KE GOOGLE SPREADSHEET -> SETELAH BERES JEDA 3 DETIK -> JALANKAN AMBIL DATA TERBARU
-      await executeGoogleSheetActionAndRefresh('saveRequest', { data: req }, 3000);
+        isItemModifiedMap[noSurat] = false;
 
-      showNotif(`PERUBAHAN ITEM PERMINTAAN #${noSurat} BERHASIL DISIMPAN KE CLOUD!`, 'success');
+        if (typeof syncSupabaseRequestsToLocalCache === 'function') {
+          await syncSupabaseRequestsToLocalCache();
+        }
 
-      if (typeof loadRiwayat === 'function') loadRiwayat();
-      if (typeof loadDashboard === 'function') loadDashboard();
-      if (currentUser && currentUser.category === 'SERVICE' && currentUser.area === 'TSM') {
-        if (typeof loadMasterDbTable === 'function') loadMasterDbTable();
+        if (typeof notifySupabaseDataChanged === 'function') {
+          notifySupabaseDataChanged('permintaan_toko');
+        }
+
+        hideLoading();
+        showNotif(`PERUBAHAN ITEM PERMINTAAN #${noSurat} BERHASIL DISIMPAN KE CLOUD!`, 'success');
+
+        if (typeof loadRiwayat === 'function') loadRiwayat();
+        if (typeof loadDashboard === 'function') loadDashboard();
+        if (currentUser && currentUser.category === 'SERVICE' && currentUser.area === 'TSM') {
+          if (typeof loadMasterDbTable === 'function') loadMasterDbTable();
+        }
+
+        lihatDetail(noSurat);
+      } catch (err) {
+        hideLoading();
+        console.error(err);
+        showNotif('GAGAL MENYIMPAN PERUBAHAN KE CLOUD', 'danger');
       }
-
-      lihatDetail(noSurat);
-    } catch (err) {
-      console.error(err);
-      showNotif('GAGAL MENYIMPAN PERUBAHAN KE CLOUD', 'danger');
-    }
+    }, 300);
   });
 }
 window.simpanPerubahanDetailAdmin = simpanPerubahanDetailAdmin;
@@ -6351,7 +6401,30 @@ async function lihatDetail(noSuratOrObj, fromDashboard = false) {
     const requests = typeof getRequestsFromDB === 'function' ? getRequestsFromDB() : [];
     req = requests.find(r => r && (r.noSurat === targetStr || decodeURIComponent(r.noSurat || '') === targetStr || r.noSurat === decodeURIComponent(targetStr)));
 
-    // Local requests are always up to date from Google Sheets sync
+    if (!req && typeof supabase !== 'undefined' && supabase) {
+      try {
+        const { data, error } = await supabase.from('permintaan_toko').select('*').eq('no_surat', targetStr);
+        if (data && data.length > 0) {
+          const raw = data[0];
+          req = {
+            id: raw.id,
+            noSurat: raw.no_surat,
+            tanggal: raw.tanggal,
+            toko: raw.toko,
+            area: raw.area,
+            jenis: raw.jenis,
+            catatan: raw.catatan,
+            items: raw.items,
+            photos: raw.photos,
+            status: raw.status,
+            serviceApprove: raw.service_approve,
+            createdBy: raw.created_by,
+            createdAt: raw.created_at,
+            userId: raw.user_id
+          };
+        }
+      } catch(e) {}
+    }
   }
 
   if (!req) return false;
@@ -7547,7 +7620,7 @@ function cropAndCenterCanvasSignature(srcCanvas) {
 window.cropAndCenterCanvasSignature = cropAndCenterCanvasSignature;
 
 function simpanTTD() {
-  showConfirm('SIMPAN TANDA TANGAN DIGITAL INI?', async () => {
+  showConfirm('SIMPAN TANDA TANGAN DIGITAL INI?', () => {
     if (!canvasTTD) return;
     const png = cropAndCenterCanvasSignature(canvasTTD);
     const ttdMap = JSON.parse(appStorage.getItem(TTD_DB_KEY) || '{}');
@@ -7574,12 +7647,40 @@ function simpanTTD() {
       }
     } catch(e) {}
 
-    tutupTTD();
-    showNotif('TANDA TANGAN DIGITAL BERHASIL DISIMPAN!', 'success');
+    if (currentUser) {
+      if (currentUser.id) appStorage.setItem(`LOCAL_TTD_${currentUser.id}`, png);
+      if (currentUser.username) appStorage.setItem(`LOCAL_TTD_${currentUser.username}`, png);
+    }
 
-    // PROSES SINKRONISASI BERJALAN DI LATAR BELAKANG
-    executeGoogleSheetActionAndRefresh('saveTtd', { key: `TTD_${currentUser.id}`, value: png, ttd: ttdMap });
-    if (typeof pushCentralCloudDB === 'function') pushCentralCloudDB();
+    if (typeof supabase !== 'undefined' && supabase) {
+      try {
+        const systemTtdRow = {
+          id: '__SYSTEM_TTD_MAP__',
+          no_surat: '__SYSTEM_TTD_MAP__',
+          tanggal: typeof getFormattedDateDDMMYYYY === 'function' ? getFormattedDateDDMMYYYY() : '',
+          toko: 'SYSTEM',
+          area: 'ALL',
+          jenis: 'SYSTEM',
+          catatan: JSON.stringify(ttdMap),
+          items: [],
+          photos: [],
+          status: 'DONE',
+          service_approve: true,
+          created_by: 'SYSTEM',
+          created_at: new Date().toISOString()
+        };
+        supabase.from('permintaan_toko').upsert(systemTtdRow).then(({ error }) => {
+          if (error) console.warn('[SUPABASE TTD SAVE NOTICE]:', error.message);
+          else console.log('⚡ [SUPABASE TTD SUCCESS]: TTD berhasil disimpan ke Supabase Database!');
+        });
+      } catch(sbErr) {
+        console.warn('[SUPABASE TTD SAVE NOTICE]:', sbErr);
+      }
+    }
+    
+    pushCentralCloudDB();
+    showNotif('TANDA TANGAN DIGITAL BERHASIL DISIMPAN!', 'success');
+    tutupTTD();
   });
 }
 
@@ -7833,7 +7934,10 @@ function hapusChatRoom(roomTarget, userTarget) {
             await dbRealtime.ref('chat_rooms').set(rooms);
           } catch(e) {}
         }
-        callGoogleScript('deleteChatRoom', { room: roomTarget }, 'POST').catch(e => console.warn(e));
+        if (typeof supabase !== 'undefined' && supabase) {
+          try { await supabase.from('chat').delete().eq('room', roomTarget); } catch(e) {}
+          try { await supabase.from('chat_messages').delete().eq('room', roomTarget); } catch(e) {}
+        }
 
         if (typeof pushCentralCloudDB === 'function') pushCentralCloudDB();
 
@@ -8027,17 +8131,31 @@ function kirimPesanChat() {
     tanggal: timeStr
   });
 
-  // 2. GOOGLE APPS SCRIPT DIRECT CHAT PUSH
-  callGoogleScript('saveChatMessage', {
-    data: {
-      id: `MSG-${Date.now()}`,
-      roomId: roomTarget,
-      senderUsername,
-      senderName: `${currentUser.fullName || currentUser.username} (${currentUser.toko || currentUser.area})`,
-      message: pesan,
-      timestamp: Date.now()
+  // 2. SUPABASE DIRECT PUSH VIA MAIN TABLE SAFELY (ZERO 404 CONSOLE ERRORS)
+  if (typeof supabase !== 'undefined' && supabase) {
+    try {
+      const systemChatRow = {
+        id: '__SYSTEM_CHAT_MESSAGES__',
+        no_surat: '__SYSTEM_CHAT_MESSAGES__',
+        tanggal: typeof getFormattedDateDDMMYYYY === 'function' ? getFormattedDateDDMMYYYY() : '',
+        toko: 'SYSTEM',
+        area: 'ALL',
+        jenis: 'SYSTEM',
+        catatan: JSON.stringify(allChats),
+        items: [],
+        photos: [],
+        status: 'DONE',
+        service_approve: true,
+        created_by: 'SYSTEM',
+        created_at: new Date().toISOString()
+      };
+      supabase.from('permintaan_toko').upsert(systemChatRow).then(({ error }) => {
+        if (error) console.warn('[SUPABASE CHAT SAVE ERROR]:', error.message);
+      });
+    } catch(sbErr) {
+      console.warn('[SUPABASE CHAT SAVE ERROR]:', sbErr);
     }
-  }, 'POST').catch(e => console.warn(e));
+  }
 
   const roomUpper = String(roomTarget).toUpperCase();
   const rIdx = rooms.findIndex(x => String(x.room).toUpperCase() === roomUpper || String(x.user).toUpperCase() === String(targetUser).toUpperCase());
@@ -8097,6 +8215,30 @@ function hapusChatRoom(roomTarget, userTarget) {
 
         appStorage.setItem(CHAT_DB_KEY, JSON.stringify(allChats));
         appStorage.setItem(CHAT_ROOM_DB_KEY, JSON.stringify(rooms));
+
+        // 2. SYNC UPDATED CHATS TO SUPABASE VIA MAIN TABLE SAFELY
+        if (typeof supabase !== 'undefined' && supabase) {
+          try {
+            const systemChatRow = {
+              id: '__SYSTEM_CHAT_MESSAGES__',
+              no_surat: '__SYSTEM_CHAT_MESSAGES__',
+              tanggal: typeof getFormattedDateDDMMYYYY === 'function' ? getFormattedDateDDMMYYYY() : '',
+              toko: 'SYSTEM',
+              area: 'ALL',
+              jenis: 'SYSTEM',
+              catatan: JSON.stringify(allChats),
+              items: [],
+              photos: [],
+              status: 'DONE',
+              service_approve: true,
+              created_by: 'SYSTEM',
+              created_at: new Date().toISOString()
+            };
+            await supabase.from('permintaan_toko').upsert(systemChatRow);
+          } catch(sbErr) {
+            console.warn('[SUPABASE CHAT DELETE NOTICE]:', sbErr);
+          }
+        }
 
         hideLoading();
         showNotif(`CHAT ROOM DENGAN '${userTarget || roomTarget}' BERHASIL DIHAPUS!`, 'success');
@@ -8177,7 +8319,31 @@ function hapusSemuaChatAdmin() {
         try { localStorage.setItem(CHAT_DB_KEY, JSON.stringify([])); } catch(e) {}
         try { localStorage.setItem(CHAT_ROOM_DB_KEY, JSON.stringify([])); } catch(e) {}
 
-        // 2. KOSONGKAN DI FIRESTORE & REALTIME DB
+        // 2. KOSONGKAN LANGSUNG DI SUPABASE CLOUD DATABASE
+        if (typeof supabase !== 'undefined' && supabase) {
+          try {
+            const systemChatRow = {
+              id: '__SYSTEM_CHAT_MESSAGES__',
+              no_surat: '__SYSTEM_CHAT_MESSAGES__',
+              tanggal: typeof getFormattedDateDDMMYYYY === 'function' ? getFormattedDateDDMMYYYY() : '',
+              toko: 'SYSTEM',
+              area: 'ALL',
+              jenis: 'SYSTEM',
+              catatan: JSON.stringify([]),
+              items: [],
+              photos: [],
+              status: 'DONE',
+              service_approve: true,
+              created_by: 'SYSTEM',
+              created_at: new Date().toISOString()
+            };
+            await supabase.from('permintaan_toko').upsert(systemChatRow);
+          } catch(sbErr) {
+            console.warn('[SUPABASE CHAT DELETE NOTICE]:', sbErr);
+          }
+        }
+
+        // 3. KOSONGKAN DI FIRESTORE & REALTIME DB
         if (typeof dbFirestore !== 'undefined' && dbFirestore) {
           try {
             await dbFirestore.collection('app_settings').doc('config').set({
@@ -8375,90 +8541,105 @@ function hapusMultiUser() {
 
   const usernamesStr = selectedUsers.map(u => u.username).join(', ');
 
-  showConfirm(`YAKIN INGIN MENGHAPUS ${selectedUsers.length} USER TERPILIH? (${usernamesStr})`, async () => {
-    try {
-      showLoading('MENGHAPUS USER & TOKO DARI GOOGLE SPREADSHEET...');
-      const delUsers = JSON.parse(appStorage.getItem(DELETED_USERS_KEY) || '[]');
-      const delStores = JSON.parse(appStorage.getItem(DELETED_STORES_KEY) || '[]');
-      let localStores = JSON.parse(appStorage.getItem(STORES_DB_KEY) || '[]');
+  showConfirm(`YAKIN INGIN MENGHAPUS ${selectedUsers.length} USER TERPILIH? (${usernamesStr})`, () => {
+    showLoading('MENGHAPUS USER & TOKO TERPILIH...');
+    setTimeout(async () => {
+      try {
+        const delUsers = JSON.parse(appStorage.getItem(DELETED_USERS_KEY) || '[]');
+        const delStores = JSON.parse(appStorage.getItem(DELETED_STORES_KEY) || '[]');
+        let localStores = JSON.parse(appStorage.getItem(STORES_DB_KEY) || '[]');
 
-      const idsToDelete = selectedUsers.map(u => u.id).filter(Boolean);
-      const usernamesToDelete = selectedUsers.map(u => u.username).filter(Boolean);
-      const fullNamesToDelete = selectedUsers.map(u => u.fullName).filter(Boolean);
+        // 1. SUPABASE BATCH DELETE FOR ALL SELECTED USERS & STORES
+        if (typeof supabase !== 'undefined' && supabase) {
+          const idsToDelete = selectedUsers.map(u => u.id).filter(Boolean);
+          const usernamesToDelete = selectedUsers.map(u => u.username).filter(Boolean);
+          const fullNamesToDelete = selectedUsers.map(u => u.fullName).filter(Boolean);
 
-      for (const u of selectedUsers) {
-        try {
-          if (u.id && !delUsers.includes(u.id)) delUsers.push(u.id);
-          if (u.username && !delUsers.includes(u.username)) delUsers.push(u.username);
+          try {
+            if (idsToDelete.length) await supabase.from('users').delete().in('id', idsToDelete);
+          } catch(e) {}
+          try {
+            if (usernamesToDelete.length) await supabase.from('users').delete().in('username', usernamesToDelete);
+          } catch(e) {}
+          try {
+            if (idsToDelete.length) await supabase.from('toko_list').delete().in('id', idsToDelete);
+          } catch(e) {}
+          try {
+            if (fullNamesToDelete.length) await supabase.from('toko_list').delete().in('full_name', fullNamesToDelete);
+          } catch(e) {}
+        }
 
-          const docId = String(u.username || '').toUpperCase();
-          if (docId) {
-            if (typeof dbFirestore !== 'undefined' && dbFirestore) {
-              await dbFirestore.collection('users').doc(docId).delete().catch(e => console.warn(e));
-            }
-            if (typeof dbRealtime !== 'undefined' && dbRealtime) {
-              await dbRealtime.ref(`users/${docId}`).remove().catch(e => console.warn(e));
-            }
-          }
+        for (const u of selectedUsers) {
+          try {
+            if (u.id && !delUsers.includes(u.id)) delUsers.push(u.id);
+            if (u.username && !delUsers.includes(u.username)) delUsers.push(u.username);
 
-          const safeFullName = String(u.fullName || '').toUpperCase();
-          const safeArea = String(u.area || '').toUpperCase();
-          if (u.category === 'TOKO' || safeFullName) {
-            const storeKey = `${safeFullName}_${safeArea}`;
-            if (storeKey && !delStores.includes(storeKey)) delStores.push(storeKey);
-            localStores = localStores.filter(s => s.id !== u.id && (safeFullName && s.fullName ? s.fullName.toUpperCase() !== safeFullName : true));
-
-            if (u.id) {
+            const docId = String(u.username || '').toUpperCase();
+            if (docId) {
               if (typeof dbFirestore !== 'undefined' && dbFirestore) {
-                await dbFirestore.collection('stores').doc(u.id).delete().catch(e => console.warn(e));
+                await dbFirestore.collection('users').doc(docId).delete().catch(e => console.warn(e));
               }
               if (typeof dbRealtime !== 'undefined' && dbRealtime) {
-                await dbRealtime.ref(`stores/${u.id}`).remove().catch(e => console.warn(e));
+                await dbRealtime.ref(`users/${docId}`).remove().catch(e => console.warn(e));
               }
             }
+
+            const safeFullName = String(u.fullName || '').toUpperCase();
+            const safeArea = String(u.area || '').toUpperCase();
+            if (u.category === 'TOKO' || safeFullName) {
+              const storeKey = `${safeFullName}_${safeArea}`;
+              if (storeKey && !delStores.includes(storeKey)) delStores.push(storeKey);
+              localStores = localStores.filter(s => s.id !== u.id && (safeFullName && s.fullName ? s.fullName.toUpperCase() !== safeFullName : true));
+
+              if (u.id) {
+                if (typeof dbFirestore !== 'undefined' && dbFirestore) {
+                  await dbFirestore.collection('stores').doc(u.id).delete().catch(e => console.warn(e));
+                }
+                if (typeof dbRealtime !== 'undefined' && dbRealtime) {
+                  await dbRealtime.ref(`stores/${u.id}`).remove().catch(e => console.warn(e));
+                }
+              }
+            }
+          } catch (loopErr) {
+            console.warn('[HAPUS MULTI USER ITEM NOTICE]:', loopErr);
           }
-        } catch (loopErr) {
-          console.warn('[HAPUS MULTI USER ITEM NOTICE]:', loopErr);
         }
+
+        appStorage.setItem(DELETED_USERS_KEY, JSON.stringify(delUsers));
+        appStorage.setItem(DELETED_STORES_KEY, JSON.stringify(delStores));
+        appStorage.setItem(STORES_DB_KEY, JSON.stringify(localStores));
+        try { localStorage.setItem(STORES_DB_KEY, JSON.stringify(localStores)); } catch(e) {}
+        try { localStorage.setItem(DELETED_STORES_KEY, JSON.stringify(delStores)); } catch(e) {}
+        try { localStorage.setItem(DELETED_USERS_KEY, JSON.stringify(delUsers)); } catch(e) {}
+
+        const remainingUsers = users.filter(u => 
+          !userIds.includes(u.id) || 
+          String(u.username || '').trim().toUpperCase() === 'ADMIN' ||
+          (currentUser && String(u.username || '').toUpperCase() === String(currentUser.username || '').toUpperCase())
+        );
+        saveUsersToDB(remainingUsers);
+
+        if (typeof pushCentralCloudDB === 'function') {
+          try { await pushCentralCloudDB(); } catch(e) {}
+        }
+
+        if (typeof syncAllDataToCache === 'function') {
+          try { await syncAllDataToCache().catch(() => {}); } catch(e) {}
+        }
+
+        hideLoading();
+        showNotif(`BERHASIL MENGHAPUS ${selectedUsers.length} USER & TOKO TERPILIH!`, 'success');
+        if (typeof loadUsersManagement === 'function') loadUsersManagement();
+        if (typeof loadForm === 'function') loadForm();
+        if (typeof loadDaftarTokoModal === 'function') loadDaftarTokoModal();
+        if (typeof updateStoreDropdownOptions === 'function') updateStoreDropdownOptions();
+        if (typeof loadDashboard === 'function') loadDashboard();
+      } catch (err) {
+        hideLoading();
+        console.error('[HAPUS MULTI USER ERROR]:', err);
+        showNotif('TERJADI KESALAHAN SAAT MENGHAPUS MULTI USER: ' + (err.message || err), 'error');
       }
-
-      appStorage.setItem(DELETED_USERS_KEY, JSON.stringify(delUsers));
-      appStorage.setItem(DELETED_STORES_KEY, JSON.stringify(delStores));
-      appStorage.setItem(STORES_DB_KEY, JSON.stringify(localStores));
-      try { localStorage.setItem(STORES_DB_KEY, JSON.stringify(localStores)); } catch(e) {}
-      try { localStorage.setItem(DELETED_STORES_KEY, JSON.stringify(delStores)); } catch(e) {}
-      try { localStorage.setItem(DELETED_USERS_KEY, JSON.stringify(delUsers)); } catch(e) {}
-
-      const remainingUsers = users.filter(u => 
-        !userIds.includes(u.id) || 
-        String(u.username || '').trim().toUpperCase() === 'ADMIN' ||
-        (currentUser && String(u.username || '').toUpperCase() === String(currentUser.username || '').toUpperCase())
-      );
-      saveUsersToDB(remainingUsers);
-
-      // BATCH DELETE DARI GOOGLE SPREADSHEET DENGAN JEDA DAN SYNC ULANG OTOMATIS
-      if (idsToDelete.length || usernamesToDelete.length) {
-        await callGoogleScript('deleteBulkUsers', { userIds: idsToDelete, usernames: usernamesToDelete }, 'POST');
-      }
-      if (idsToDelete.length || fullNamesToDelete.length) {
-        await callGoogleScript('deleteBulkStores', { storeIds: idsToDelete, storeNames: fullNamesToDelete }, 'POST');
-      }
-
-      await new Promise(r => setTimeout(r, 700));
-      await syncGoogleSheetToLocalCache();
-
-      showNotif(`BERHASIL MENGHAPUS ${selectedUsers.length} USER & TOKO DARI GOOGLE SPREADSHEET!`, 'success');
-    } catch (err) {
-      console.error('[HAPUS MULTI USER ERROR]:', err);
-      showNotif('TERJADI KESALAHAN SAAT MENGHAPUS MULTI USER: ' + (err.message || err), 'error');
-    } finally {
-      hideLoading();
-      if (typeof loadUsersManagement === 'function') loadUsersManagement();
-      if (typeof loadForm === 'function') loadForm();
-      if (typeof loadDaftarTokoModal === 'function') loadDaftarTokoModal();
-      if (typeof updateStoreDropdownOptions === 'function') updateStoreDropdownOptions();
-      if (typeof loadDashboard === 'function') loadDashboard();
-    }
+    }, 400);
   });
 }
 window.toggleSelectAllUsers = toggleSelectAllUsers;
@@ -8565,43 +8746,72 @@ async function simpanUserData() {
       saveUsersToDB(users);
 
       const docId = String(username).toUpperCase();
+      if (typeof supabase !== 'undefined' && supabase) {
+        await supabase.from('users').upsert({
+          id: users[idx].id || docId,
+          username: users[idx].username,
+          password: users[idx].password,
+          full_name: users[idx].fullName,
+          store_code: users[idx].storeCode,
+          phone: users[idx].phone,
+          category: users[idx].category,
+          area: users[idx].area,
+          created_at: users[idx].createdAt
+        });
+      }
+      if (typeof syncSupabaseUsersToLocalCache === 'function') {
+        await syncSupabaseUsersToLocalCache();
+      }
+
       if (category === 'TOKO') {
         try {
           const localStores = JSON.parse(appStorage.getItem(STORES_DB_KEY) || '[]');
           const sIdx = localStores.findIndex(s => s.id === users[idx].id || (s.fullName && s.fullName.toUpperCase() === fullName.toUpperCase()));
-          const storeObj = {
-            id: users[idx].id,
-            fullName: fullName,
-            area: area,
-            storeCode: storeCode || generateStoreCode(fullName, area),
-            createdBy: currentUser ? currentUser.fullName : 'ADMIN'
-          };
           if (sIdx !== -1) {
-            localStores[sIdx] = storeObj;
+            localStores[sIdx].fullName = fullName;
+            localStores[sIdx].area = area;
+            localStores[sIdx].storeCode = storeCode || generateStoreCode(fullName);
           } else {
-            localStores.push(storeObj);
+            localStores.push({
+              id: users[idx].id,
+              fullName: fullName,
+              area: area,
+              storeCode: storeCode || generateStoreCode(fullName),
+              createdBy: currentUser ? currentUser.fullName : 'ADMIN'
+            });
           }
           appStorage.setItem(STORES_DB_KEY, JSON.stringify(localStores));
-          callGoogleScript('saveStore', { data: storeObj }, 'POST').catch(e => console.warn(e));
+
+          if (typeof supabase !== 'undefined' && supabase) {
+            await supabase.from('toko_list').upsert({
+              id: users[idx].id,
+              full_name: fullName,
+              area: area,
+              store_code: storeCode || generateStoreCode(fullName),
+              created_by: currentUser ? currentUser.fullName : 'ADMIN'
+            }).catch(e => console.warn(e));
+          }
+          if (typeof syncSupabaseStoresToLocalCache === 'function') {
+            await syncSupabaseStoresToLocalCache().catch(() => {});
+          }
         } catch(e) {}
       }
 
-      // 1. MUNCULKAN NOTIFIKASI LANGSUNG DI AWAL & PERBARUI TAMPILAN
-      showNotif(`DATA USER ${username} BERHASIL DIPERBARUI!`, 'info');
-      tutupUserModal();
-      loadUsersManagement();
-      if (typeof loadDaftarTokoModal === 'function') loadDaftarTokoModal();
-      if (typeof updateStoreDropdownOptions === 'function') updateStoreDropdownOptions();
-
-      // 2. PROSES SINKRONISASI BERJALAN DI LATAR BELAKANG
       if (typeof dbFirestore !== 'undefined' && dbFirestore) {
         dbFirestore.collection('users').doc(docId).set(users[idx], { merge: true }).catch(e => console.warn(e));
       }
       if (typeof dbRealtime !== 'undefined' && dbRealtime) {
         dbRealtime.ref(`users/${docId}`).set(users[idx]).catch(e => console.warn(e));
       }
+      if (typeof pushCentralCloudDB === 'function') {
+        pushCentralCloudDB();
+      }
 
-      executeGoogleSheetActionAndRefresh('saveUser', { data: users[idx] });
+      showNotif(`DATA USER ${username} BERHASIL DIPERBARUI!`, 'info');
+      tutupUserModal();
+      loadUsersManagement();
+      if (typeof loadDaftarTokoModal === 'function') loadDaftarTokoModal();
+      if (typeof updateStoreDropdownOptions === 'function') updateStoreDropdownOptions();
       return;
     }
   }
@@ -8640,7 +8850,7 @@ async function simpanUserData() {
     username,
     password,
     fullName,
-    storeCode: storeCode || generateStoreCode(fullName, area),
+    storeCode: storeCode || generateStoreCode(fullName),
     phone,
     category,
     area,
@@ -8651,41 +8861,70 @@ async function simpanUserData() {
   saveUsersToDB(users);
 
   const docId = String(username).toUpperCase();
+  if (typeof supabase !== 'undefined' && supabase) {
+    await supabase.from('users').upsert({
+      id: newUser.id,
+      username: newUser.username,
+      password: newUser.password,
+      full_name: newUser.fullName,
+      store_code: newUser.storeCode,
+      phone: newUser.phone,
+      category: newUser.category,
+      area: newUser.area,
+      created_at: newUser.createdAt
+    });
+
+    if (category === 'TOKO') {
+      try {
+        await supabase.from('toko_list').upsert({
+          id: newUser.id,
+          full_name: newUser.fullName,
+          area: newUser.area,
+          store_code: newUser.storeCode,
+          created_by: currentUser ? currentUser.fullName : 'ADMIN'
+        });
+      } catch (e) {}
+    }
+  }
 
   if (category === 'TOKO') {
     try {
       const localStores = JSON.parse(appStorage.getItem(STORES_DB_KEY) || '[]');
-      const storeObj = {
-        id: newUser.id,
-        fullName: newUser.fullName,
-        area: newUser.area,
-        storeCode: newUser.storeCode,
-        createdBy: currentUser ? currentUser.fullName : 'ADMIN'
-      };
       if (!localStores.some(s => s.id === newUser.id || (s.fullName && s.fullName.toUpperCase() === fullName.toUpperCase()))) {
-        localStores.push(storeObj);
+        localStores.push({
+          id: newUser.id,
+          fullName: newUser.fullName,
+          area: newUser.area,
+          storeCode: newUser.storeCode,
+          createdBy: currentUser ? currentUser.fullName : 'ADMIN'
+        });
         appStorage.setItem(STORES_DB_KEY, JSON.stringify(localStores));
       }
-      callGoogleScript('saveStore', { data: storeObj }, 'POST').catch(e => console.warn(e));
     } catch (e) {}
   }
 
-  // 1. MUNCULKAN NOTIFIKASI LANGSUNG DI AWAL & PERBARUI TAMPILAN
-  showNotif(`USER ${fullName} (${username}) BERHASIL DISIMPAN!`, 'success');
-  tutupUserModal();
-  loadUsersManagement();
-  if (typeof loadDaftarTokoModal === 'function') loadDaftarTokoModal();
-  if (typeof updateStoreDropdownOptions === 'function') updateStoreDropdownOptions();
-
-  // 2. PROSES SINKRONISASI BERJALAN DI LATAR BELAKANG
+  if (typeof syncSupabaseUsersToLocalCache === 'function') {
+    await syncSupabaseUsersToLocalCache();
+  }
+  if (typeof syncSupabaseStoresToLocalCache === 'function') {
+    await syncSupabaseStoresToLocalCache();
+  }
   if (typeof dbFirestore !== 'undefined' && dbFirestore) {
     dbFirestore.collection('users').doc(docId).set(newUser).catch(e => console.warn(e));
   }
   if (typeof dbRealtime !== 'undefined' && dbRealtime) {
     dbRealtime.ref(`users/${docId}`).set(newUser).catch(e => console.warn(e));
   }
+  if (typeof pushCentralCloudDB === 'function') {
+    pushCentralCloudDB();
+  }
 
-  executeGoogleSheetActionAndRefresh('saveUser', { data: newUser });
+  showNotif(`USER ${fullName} (${username}) BERHASIL DISIMPAN!`, 'success');
+
+  tutupUserModal();
+  loadUsersManagement();
+  if (typeof loadDaftarTokoModal === 'function') loadDaftarTokoModal();
+  if (typeof updateStoreDropdownOptions === 'function') updateStoreDropdownOptions();
 }
 
 function hapusUser(userId) {
@@ -8707,60 +8946,86 @@ function hapusUser(userId) {
     return;
   }
 
-  showConfirm(`HAPUS USER '${u.fullName || u.username}' (${u.username})?`, async () => {
-    try {
-      // 1. UPDATE DELETED KEYS & LOKAL STORAGE FOR USERS & STORES
+  showConfirm(`HAPUS USER '${u.fullName || u.username}' (${u.username})?`, () => {
+    showLoading('MENGHAPUS USER...');
+    setTimeout(async () => {
       try {
-        const delUsers = JSON.parse(appStorage.getItem(DELETED_USERS_KEY) || '[]');
-        if (!delUsers.includes(u.id)) delUsers.push(u.id);
-        appStorage.setItem(DELETED_USERS_KEY, JSON.stringify(delUsers));
+        // 1. UPDATE DELETED KEYS & LOKAL STORAGE FOR USERS & STORES
+        try {
+          const delUsers = JSON.parse(appStorage.getItem(DELETED_USERS_KEY) || '[]');
+          if (!delUsers.includes(u.id)) delUsers.push(u.id);
+          appStorage.setItem(DELETED_USERS_KEY, JSON.stringify(delUsers));
 
-        const localStores = JSON.parse(appStorage.getItem(STORES_DB_KEY) || '[]');
-        const updatedStores = localStores.filter(s => s.id !== u.id && !(s.fullName && u.fullName && s.fullName.toUpperCase() === u.fullName.toUpperCase()));
-        appStorage.setItem(STORES_DB_KEY, JSON.stringify(updatedStores));
+          const localStores = JSON.parse(appStorage.getItem(STORES_DB_KEY) || '[]');
+          const updatedStores = localStores.filter(s => s.id !== u.id && !(s.fullName && u.fullName && s.fullName.toUpperCase() === u.fullName.toUpperCase()));
+          appStorage.setItem(STORES_DB_KEY, JSON.stringify(updatedStores));
 
-        if (u.fullName && u.area) {
-          const storeKey = `${u.fullName.toUpperCase()}_${u.area}`;
-          const deletedStoreKeys = JSON.parse(appStorage.getItem(DELETED_STORES_KEY) || '[]');
-          if (!deletedStoreKeys.includes(storeKey)) {
-            deletedStoreKeys.push(storeKey);
-            appStorage.setItem(DELETED_STORES_KEY, JSON.stringify(deletedStoreKeys));
+          if (u.fullName && u.area) {
+            const storeKey = `${u.fullName.toUpperCase()}_${u.area}`;
+            const deletedStoreKeys = JSON.parse(appStorage.getItem(DELETED_STORES_KEY) || '[]');
+            if (!deletedStoreKeys.includes(storeKey)) {
+              deletedStoreKeys.push(storeKey);
+              appStorage.setItem(DELETED_STORES_KEY, JSON.stringify(deletedStoreKeys));
+            }
+          }
+        } catch(e) {}
+
+        const updatedUsers = users.filter(x => x.id !== u.id && x.username !== u.username);
+        try {
+          saveUsersToDB(updatedUsers);
+        } catch(e) {
+          cacheUsers = updatedUsers;
+        }
+
+        // 2. HAPUS DARI SUPABASE (TABEL users & toko_list JIKA KATEGORI TOKO)
+        if (typeof supabase !== 'undefined' && supabase) {
+          try {
+            await supabase.from('users').delete().eq('id', u.id);
+            await supabase.from('users').delete().eq('username', u.username);
+            await supabase.from('toko_list').delete().eq('id', u.id);
+            if (u.fullName) {
+              await supabase.from('toko_list').delete().eq('full_name', u.fullName);
+            }
+          } catch (sbErr) {
+            console.warn('[SUPABASE DELETE USER NOTICE]:', sbErr);
           }
         }
-      } catch(e) {}
+        if (typeof syncSupabaseUsersToLocalCache === 'function') {
+          await syncSupabaseUsersToLocalCache();
+        }
+        if (typeof syncSupabaseStoresToLocalCache === 'function') {
+          await syncSupabaseStoresToLocalCache();
+        }
 
-      const updatedUsers = users.filter(x => x.id !== u.id && x.username !== u.username);
-      try {
-        saveUsersToDB(updatedUsers);
-      } catch(e) {
-        cacheUsers = updatedUsers;
-      }
+        // 3. HAPUS DARI FIREBASE ONLINE (FIRESTORE & REALTIME DB)
+        const docId = String(u.username).toUpperCase();
+        if (typeof dbFirestore !== 'undefined' && dbFirestore) {
+          await dbFirestore.collection('users').doc(docId).delete().catch(e => console.warn(e));
+          if (u.id) await dbFirestore.collection('stores').doc(u.id).delete().catch(e => console.warn(e));
+        }
+        if (typeof dbRealtime !== 'undefined' && dbRealtime) {
+          await dbRealtime.ref(`users/${docId}`).remove().catch(e => console.warn(e));
+          if (u.id) await dbRealtime.ref(`stores/${u.id}`).remove().catch(e => console.warn(e));
+        }
 
-      // 2. MUNCULKAN NOTIFIKASI LANGSUNG DI AWAL & PERBARUI TAMPILAN
-      showNotif(`USER ${u.username} BERHASIL DIHAPUS!`, 'info');
-      if (typeof loadUsersManagement === 'function') loadUsersManagement();
-      if (typeof loadDaftarTokoModal === 'function') loadDaftarTokoModal();
-      if (typeof updateStoreDropdownOptions === 'function') updateStoreDropdownOptions();
+        if (typeof pushCentralCloudDB === 'function') {
+          try { await pushCentralCloudDB(); } catch(e) {}
+        }
+        if (typeof pullCentralCloudDB === 'function') {
+          try { await pullCentralCloudDB(); } catch(e) {}
+        }
 
-      // 3. PROSES SINKRONISASI BERJALAN DI LATAR BELAKANG
-      const docId = String(u.username).toUpperCase();
-      if (typeof dbFirestore !== 'undefined' && dbFirestore) {
-        dbFirestore.collection('users').doc(docId).delete().catch(e => console.warn(e));
-        if (u.id) dbFirestore.collection('stores').doc(u.id).delete().catch(e => console.warn(e));
+        hideLoading();
+        showNotif(`USER ${u.username} BERHASIL DIHAPUS!`, 'info');
+        if (typeof loadUsersManagement === 'function') loadUsersManagement();
+        if (typeof loadDaftarTokoModal === 'function') loadDaftarTokoModal();
+        if (typeof updateStoreDropdownOptions === 'function') updateStoreDropdownOptions();
+      } catch (err) {
+        hideLoading();
+        console.error('[HAPUS USER ERROR]:', err);
+        showNotif('TERJADI KESALAHAN SAAT MENGHAPUS USER: ' + (err.message || err), 'error');
       }
-      if (typeof dbRealtime !== 'undefined' && dbRealtime) {
-        dbRealtime.ref(`users/${docId}`).remove().catch(e => console.warn(e));
-        if (u.id) dbRealtime.ref(`stores/${u.id}`).remove().catch(e => console.warn(e));
-      }
-
-      if (u.category === 'TOKO' || u.fullName) {
-        callGoogleScript('deleteStore', { storeId: u.id, storeName: u.fullName }, 'POST').catch(e => console.warn(e));
-      }
-      executeGoogleSheetActionAndRefresh('deleteUser', { userId: u.id, username: u.username });
-    } catch (err) {
-      console.error('[HAPUS USER ERROR]:', err);
-      showNotif('TERJADI KESALAHAN SAAT MENGHAPUS USER: ' + (err.message || err), 'error');
-    }
+    }, 300);
   });
 }
 window.hapusUser = hapusUser;
@@ -8890,13 +9155,18 @@ function hapusMultiMasterDb() {
           appStorage.setItem(REQUESTS_DB_KEY, JSON.stringify(updatedReqs));
         }
 
-        // 3. MUNCULKAN NOTIFIKASI LANGSUNG DI AWAL & PERBARUI TAMPILAN
-        showNotif(`BERHASIL MENGHAPUS ${noSuratList.length} DATA PERMINTAAN!`, 'info');
-        if (typeof loadMasterDbTable === 'function') loadMasterDbTable();
-        if (typeof loadRiwayat === 'function') loadRiwayat();
-        if (typeof loadDashboard === 'function') loadDashboard();
+        // 3. HAPUS BATCH DARI SUPABASE (TABEL: permintaan_toko)
+        if (typeof supabase !== 'undefined' && supabase) {
+          try {
+            await supabase.from('permintaan_toko').delete().in('no_surat', noSuratList);
+          } catch(sbErr1) {}
+        }
 
-        // 4. PROSES SINKRONISASI BERJALAN DI LATAR BELAKANG
+        if (typeof syncSupabaseRequestsToLocalCache === 'function') {
+          await syncSupabaseRequestsToLocalCache();
+        }
+
+        // 4. HAPUS INDIVIDUAL FIRESTORE & REALTIME DB
         noSuratList.forEach(noSurat => {
           try {
             const docId = String(noSurat || '').replace(/[\/\.]/g, '_');
@@ -8911,12 +9181,22 @@ function hapusMultiMasterDb() {
           } catch(e) {}
         });
 
-        executeGoogleSheetActionAndRefresh('deleteBulkRequests', { noSuratList: noSuratList });
+        if (typeof pushCentralCloudDB === 'function') {
+          try { await pushCentralCloudDB(); } catch(e) {}
+        }
+
+        hideLoading();
+        showNotif(`BERHASIL MENGHAPUS ${noSuratList.length} DATA PERMINTAAN TERPILIH!`, 'info');
+
+        if (typeof loadMasterDbTable === 'function') loadMasterDbTable();
+        if (typeof loadRiwayat === 'function') loadRiwayat();
+        if (typeof loadDashboard === 'function') loadDashboard();
       } catch (err) {
+        hideLoading();
         console.error('[HAPUS MULTI MASTER ERROR]:', err);
-        showNotif('TERJADI KESALAHAN SAAT MENGHAPUS DATA: ' + (err.message || err), 'error');
+        showNotif('TERJADI KESALAHAN SAAT MENGHAPUS DATA MULTI TERPILIH: ' + (err.message || err), 'error');
       }
-    });
+    }, 400);
   });
 }
 window.toggleSelectAllMasterDb = toggleSelectAllMasterDb;
@@ -8925,30 +9205,19 @@ window.hapusMultiMasterDb = hapusMultiMasterDb;
 
 function hapusDataMaster(noSurat) {
   if (!noSurat) return;
-  showConfirm(`ADMIN: HAPUS DATA PERMINTAAN #${noSurat}?`, async () => {
+  showConfirm(`ADMIN: HAPUS DATA PERMINTAAN #${noSurat}?`, () => {
     try {
-      // 1. DOKUMENTASIKAN KODE SURAT PADA DELETED_REQUESTS_KEY
-      try {
-        const delReqs = JSON.parse(appStorage.getItem(DELETED_REQUESTS_KEY) || '[]');
-        if (!delReqs.includes(noSurat)) {
-          delReqs.push(noSurat);
-          appStorage.setItem(DELETED_REQUESTS_KEY, JSON.stringify(delReqs));
-        }
-      } catch(e) {}
-
-      // 2. FILTER DARI CACHE LOKAL & SIMPAN
       const currentReqs = getRequestsFromDB();
-      const updatedReqs = currentReqs.filter(r => r && String(r.noSurat).trim().toUpperCase() !== String(noSurat).trim().toUpperCase());
+      const updatedReqs = currentReqs.filter(r => r.noSurat !== noSurat);
       saveRequestsToDB(updatedReqs);
 
-      // 3. MUNCULKAN NOTIFIKASI LANGSUNG DI AWAL & PERBARUI TAMPILAN
-      showNotif(`PERMINTAAN #${noSurat} BERHASIL DIHAPUS!`, 'info');
-      if (typeof loadMasterDbTable === 'function') loadMasterDbTable();
-      if (typeof loadRiwayat === 'function') loadRiwayat();
-      if (typeof loadDashboard === 'function') loadDashboard();
-
-      // 4. PROSES SINKRONISASI BERJALAN DI LATAR BELAKANG
       const docId = String(noSurat).replace(/[\/\.]/g, '_');
+      if (typeof supabase !== 'undefined' && supabase) {
+        supabase.from('permintaan_toko').delete().eq('no_surat', noSurat).then(({ error }) => {
+          if (error) console.warn('[SUPABASE DELETE NOTICE]:', error.message);
+          else console.log('⚡ [SUPABASE DELETE SUCCESS]:', noSurat);
+        });
+      }
       if (typeof dbFirestore !== 'undefined' && dbFirestore) {
         dbFirestore.collection('requests').doc(docId).delete().catch(err => console.warn('[FIRESTORE DELETE NOTICE]:', err));
       }
@@ -8956,10 +9225,20 @@ function hapusDataMaster(noSurat) {
         dbRealtime.ref(`requests/${docId}`).remove().catch(err => console.warn('[REALTIME DELETE NOTICE]:', err));
       }
 
-      executeGoogleSheetActionAndRefresh('deleteRequest', { noSurat: noSurat });
+      if (typeof pushCentralCloudDB === 'function') {
+        pushCentralCloudDB();
+      }
+
+      hideLoading();
+      showNotif(`PERMINTAAN #${noSurat} BERHASIL DIHAPUS!`, 'info');
+      
+      if (typeof loadMasterDbTable === 'function') loadMasterDbTable();
+      if (typeof loadRiwayat === 'function') loadRiwayat();
+      if (typeof loadDashboard === 'function') loadDashboard();
     } catch (err) {
+      hideLoading();
       console.error('[HAPUS MASTER ERROR]:', err);
-      showNotif('GAGAL MENGHAPUS DATA MASTER: ' + (err.message || err), 'error');
+      showNotif('GAGAL MENGHAPUS DATA MASTER!', 'error');
     }
   });
 }
@@ -9199,8 +9478,36 @@ function simpanAkun() {
           currentUser = users[idx];
           appStorage.setItem(SESSION_KEY, JSON.stringify(currentUser));
 
-          callGoogleScript('saveUser', { data: currentUser }, 'POST').catch(e => console.warn(e));
-          if (typeof pushCentralCloudDB === 'function') pushCentralCloudDB();
+          if (typeof supabase !== 'undefined' && supabase) {
+            try {
+              const userPayload = {
+                id: currentUser.id,
+                username: currentUser.username,
+                password: currentUser.password,
+                full_name: currentUser.fullName,
+                store_code: currentUser.storeCode || generateStoreCode(currentUser.fullName),
+                phone: currentUser.phone || '-',
+                category: currentUser.category,
+                area: currentUser.area,
+                created_at: currentUser.createdAt || getFormattedDateDDMMYYYY()
+              };
+
+              const { error: upErr } = await supabase.from('users').upsert(userPayload);
+              if (upErr) {
+                console.warn('[SUPABASE AKUN UPSERT NOTICE]:', upErr);
+              }
+            } catch (e) {
+              console.error("Supabase user update error:", e);
+            }
+          }
+
+          if (typeof syncSupabaseUsersToLocalCache === 'function') {
+            await syncSupabaseUsersToLocalCache();
+          }
+
+          if (typeof notifySupabaseDataChanged === 'function') {
+            notifySupabaseDataChanged('users');
+          }
 
           hideLoading();
           showNotif('PROFIL AKUN BERHASIL DIPERBARUI & DISINKRONKAN KE ALL DEVICES!', 'success');
@@ -9379,8 +9686,8 @@ function simpanTokoBaru() {
 
   if (editStoreId) {
     // MODES EDIT TOKO
-    showLoading('MEMPERBARUI DATA TOKO DI GOOGLE SPREADSHEET...');
-    (async () => {
+    showLoading('MEMPERBARUI DATA TOKO...');
+    setTimeout(async () => {
       try {
         const targetStore = existingStores.find(s => s.id === editStoreId);
         const oldName = targetStore ? targetStore.fullName : '';
@@ -9398,6 +9705,15 @@ function simpanTokoBaru() {
           }
         } catch (e) {}
 
+        if (typeof cacheStores !== 'undefined' && Array.isArray(cacheStores)) {
+          const idx = cacheStores.findIndex(s => s.id === editStoreId || (s.fullName && oldName && s.fullName.toUpperCase() === oldName.toUpperCase()));
+          if (idx !== -1) {
+            cacheStores[idx].fullName = namaToko;
+            cacheStores[idx].storeCode = newCode;
+            cacheStores[idx].area = targetArea;
+          }
+        }
+
         // 2. UPDATE AKUN USER JIKA TERKAIT
         const users = getUsersFromDB();
         const userObj = users.find(u => u.id === editStoreId || (u.fullName && oldName && u.fullName.toUpperCase() === oldName.toUpperCase()));
@@ -9406,20 +9722,49 @@ function simpanTokoBaru() {
           userObj.storeCode = newCode;
           userObj.area = targetArea;
           try { saveUsersToDB(users); } catch (e) {}
-          callGoogleScript('saveUser', { data: userObj }, 'POST').catch(e => console.warn(e));
+
+          if (typeof supabase !== 'undefined' && supabase) {
+            try {
+              await supabase.from('users').upsert({
+                id: userObj.id,
+                username: userObj.username,
+                password: userObj.password,
+                full_name: userObj.fullName,
+                store_code: userObj.storeCode,
+                phone: userObj.phone || '-',
+                category: userObj.category || 'TOKO',
+                area: targetArea,
+                created_at: userObj.createdAt || getFormattedDateDDMMYYYY()
+              });
+            } catch (e) {}
+          }
         }
 
-        // 3. UPDATE GOOGLE SPREADSHEET TOKO DI LATAR BELAKANG
-        const updatedStoreObj = {
-          id: editStoreId,
-          fullName: namaToko,
-          area: targetArea,
-          storeCode: newCode,
-          createdBy: currentUser.fullName
-        };
-        executeGoogleSheetActionAndRefresh('saveStore', { data: updatedStoreObj });
+        // 3. UPDATE SUPABASE TOKO_LIST TABEL
+        if (typeof supabase !== 'undefined' && supabase) {
+          try {
+            await supabase.from('toko_list').upsert({
+              id: editStoreId,
+              full_name: namaToko,
+              area: targetArea,
+              store_code: newCode,
+              created_by: currentUser.fullName
+            });
+          } catch (e) {
+            console.warn('[SUPABASE TOKO_LIST UPDATE WARNING]:', e);
+          }
+        }
 
-        // 4. MUNCULKAN NOTIFIKASI LANGSUNG DI AWAL & PERBARUI TAMPILAN
+        if (typeof syncSupabaseStoresToLocalCache === 'function') {
+          await syncSupabaseStoresToLocalCache();
+        }
+
+        // 4. SINKRONKAN CLOUD DATABASE
+        if (typeof pushCentralCloudDB === 'function') {
+          try { await pushCentralCloudDB(); } catch (e) {}
+        }
+
+        hideLoading();
         showNotif(`TOKO BERHASIL DIPERBARUHI MENJADI '${namaToko}' (AREA ${targetArea})!`, 'success');
 
         editStoreId = null;
@@ -9432,14 +9777,16 @@ function simpanTokoBaru() {
         if (typeof updateStoreDropdownOptions === 'function') updateStoreDropdownOptions(namaToko);
         if (typeof loadUsersManagement === 'function') loadUsersManagement();
       } catch (err) {
+        hideLoading();
         console.error('[EDIT TOKO ERROR]:', err);
         showNotif('GAGAL MEMPERBARUI TOKO: ' + (err.message || err), 'error');
       }
-    })();
+    }, 300);
     return;
   }
 
-  (async () => {
+  showLoading('MENYIMPAN TOKO BARU...');
+  setTimeout(async () => {
     try {
       const storeKey = `${namaToko}_${targetArea}`;
       let deletedStoreKeys = JSON.parse(appStorage.getItem(DELETED_STORES_KEY) || '[]');
@@ -9448,7 +9795,7 @@ function simpanTokoBaru() {
         appStorage.setItem(DELETED_STORES_KEY, JSON.stringify(deletedStoreKeys));
       }
 
-      const generatedCode = generateStoreCode(namaToko, targetArea);
+      const generatedCode = generateStoreCode(namaToko);
       const newId = `STK-${Date.now()}`;
 
       const localStores = JSON.parse(appStorage.getItem(STORES_DB_KEY) || '[]');
@@ -9481,23 +9828,68 @@ function simpanTokoBaru() {
         saveUsersToDB(users);
       }
 
-      // 1. MUNCULKAN NOTIFIKASI LANGSUNG DI AWAL & PERBARUI TAMPILAN
+      // SINKRONKAN LANGSUNG KE SUPABASE DATABASE (TABEL: toko_list & users)
+      if (typeof supabase !== 'undefined' && supabase) {
+        try {
+          await supabase.from('toko_list').upsert({
+            id: newId,
+            full_name: newStore.fullName,
+            area: newStore.area,
+            store_code: newStore.storeCode,
+            created_by: newStore.createdBy
+          });
+          if (newUserAcc) {
+            await supabase.from('users').upsert({
+              id: newUserAcc.id,
+              username: newUserAcc.username,
+              password: newUserAcc.password,
+              full_name: newUserAcc.fullName,
+              store_code: newUserAcc.storeCode,
+              phone: newUserAcc.phone,
+              category: newUserAcc.category,
+              area: newUserAcc.area,
+              created_at: newUserAcc.createdAt
+            });
+          }
+          console.log('⚡ [SUPABASE STORE SUCCESS]: Data toko berhasil disimpan ke Supabase!');
+        } catch (sbErr) {
+          console.warn('[SUPABASE STORE SAVE WARNING]:', sbErr);
+        }
+      }
+      if (typeof dbFirestore !== 'undefined' && dbFirestore) {
+        await dbFirestore.collection('stores').doc(newId).set(newStore).catch(e => console.warn(e));
+        if (newUserAcc) {
+          await dbFirestore.collection('users').doc(safeUsername).set(newUserAcc).catch(e => console.warn(e));
+        }
+      }
+      if (typeof dbRealtime !== 'undefined' && dbRealtime) {
+        await dbRealtime.ref(`stores/${newId}`).set(newStore).catch(e => console.warn(e));
+        if (newUserAcc) {
+          await dbRealtime.ref(`users/${safeUsername}`).set(newUserAcc).catch(e => console.warn(e));
+        }
+      }
+
+      if (typeof pushCentralCloudDB === 'function') {
+        await pushCentralCloudDB();
+      }
+
+      // AMBIL DATA TERBARU DARI CLOUD SEHINGGA DATA LANGSUNG MASUK KE DATABASE & MENU USER ADMIN
+      if (typeof syncAllDataToCache === 'function') {
+        await syncAllDataToCache().catch(() => {});
+      }
+
+      hideLoading();
       showNotif(`TOKO '${namaToko}' BERHASIL DITAMBAHKAN!`, 'success');
       if (inputEl) inputEl.value = '';
       if (typeof loadDaftarTokoModal === 'function') loadDaftarTokoModal();
       if (typeof updateStoreDropdownOptions === 'function') updateStoreDropdownOptions(namaToko);
       if (typeof loadUsersManagement === 'function') loadUsersManagement();
-
-      // 2. PROSES SINKRONISASI BERJALAN DI LATAR BELAKANG
-      if (newUserAcc) {
-        callGoogleScript('saveUser', { data: newUserAcc }, 'POST').catch(e => console.warn(e));
-      }
-      executeGoogleSheetActionAndRefresh('saveStore', { data: newStore });
     } catch (err) {
+      hideLoading();
       console.error('[SIMPAN TOKO ERROR]:', err);
       showNotif('GAGAL MENYIMPAN TOKO!', 'error');
     }
-  })();
+  }, 300);
 }
 window.simpanTokoBaru = simpanTokoBaru;
 
@@ -9507,49 +9899,80 @@ function hapusTokoCustom(id) {
   const name = store ? store.fullName : 'TOKO';
   const storeArea = store ? store.area : (currentUser ? currentUser.area : '');
 
-  showConfirm(`HAPUS TOKO '${name}' DARI DAFTAR?`, async () => {
-    try {
-      // 1. UPDATE CACHE LOKAL & DELETED KEYS
+  showConfirm(`HAPUS TOKO '${name}' DARI DAFTAR?`, () => {
+    showLoading('MENGHAPUS TOKO...');
+    setTimeout(async () => {
       try {
-        const localStores = JSON.parse(appStorage.getItem(STORES_DB_KEY) || '[]');
-        const updatedLocal = localStores.filter(s => s.id !== id && s.fullName.toUpperCase() !== name.toUpperCase());
-        appStorage.setItem(STORES_DB_KEY, JSON.stringify(updatedLocal));
-      } catch(e) {}
+        // 1. UPDATE CACHE LOKAL & DELETED KEYS
+        try {
+          const localStores = JSON.parse(appStorage.getItem(STORES_DB_KEY) || '[]');
+          const updatedLocal = localStores.filter(s => s.id !== id && s.fullName.toUpperCase() !== name.toUpperCase());
+          appStorage.setItem(STORES_DB_KEY, JSON.stringify(updatedLocal));
+        } catch(e) {}
 
-      const storeKey = `${name.toUpperCase()}_${storeArea}`;
-      try {
-        const deletedStoreKeys = JSON.parse(appStorage.getItem(DELETED_STORES_KEY) || '[]');
-        if (!deletedStoreKeys.includes(storeKey)) {
-          deletedStoreKeys.push(storeKey);
-          appStorage.setItem(DELETED_STORES_KEY, JSON.stringify(deletedStoreKeys));
+        const storeKey = `${name.toUpperCase()}_${storeArea}`;
+        try {
+          const deletedStoreKeys = JSON.parse(appStorage.getItem(DELETED_STORES_KEY) || '[]');
+          if (!deletedStoreKeys.includes(storeKey)) {
+            deletedStoreKeys.push(storeKey);
+            appStorage.setItem(DELETED_STORES_KEY, JSON.stringify(deletedStoreKeys));
+          }
+        } catch(e) {}
+
+        const users = getUsersFromDB();
+        const updatedUsers = users.filter(u => u.id !== id && !(u.category === 'TOKO' && u.fullName && u.fullName.toUpperCase() === name.toUpperCase()));
+        try { saveUsersToDB(updatedUsers); } catch(e) {}
+
+        // 2. HAPUS LANGSUNG DARI SUPABASE DATABASE (TABEL: toko_list & users)
+        if (typeof supabase !== 'undefined' && supabase) {
+          try {
+            await supabase.from('toko_list').delete().eq('id', id);
+            await supabase.from('toko_list').delete().eq('full_name', name);
+            await supabase.from('users').delete().eq('id', id);
+            await supabase.from('users').delete().eq('full_name', name);
+          } catch (sbErr) {
+            console.warn('[SUPABASE DELETE STORE NOTICE]:', sbErr);
+          }
         }
-      } catch(e) {}
 
-      const users = getUsersFromDB();
-      const updatedUsers = users.filter(u => u.id !== id && !(u.category === 'TOKO' && u.fullName && u.fullName.toUpperCase() === name.toUpperCase()));
-      try { saveUsersToDB(updatedUsers); } catch(e) {}
+        // 3. HAPUS LANGSUNG DARI FIREBASE ONLINE
+        const safeUsername = name.replace(/[^A-Z0-9]/gi, '_').toUpperCase();
+        if (typeof dbFirestore !== 'undefined' && dbFirestore) {
+          await dbFirestore.collection('stores').doc(id).delete().catch(e => console.warn(e));
+          await dbFirestore.collection('users').doc(safeUsername).delete().catch(e => console.warn(e));
+        }
+        if (typeof dbRealtime !== 'undefined' && dbRealtime) {
+          await dbRealtime.ref(`stores/${id}`).remove().catch(e => console.warn(e));
+          await dbRealtime.ref(`users/${safeUsername}`).remove().catch(e => console.warn(e));
+        }
 
-      // 2. MUNCULKAN NOTIFIKASI LANGSUNG DI AWAL & PERBARUI TAMPILAN
-      showNotif(`TOKO '${name}' BERHASIL DIHAPUS!`, 'info');
+        if (typeof pushCentralCloudDB === 'function') {
+          await pushCentralCloudDB();
+        }
 
-      // Buka kembali modal tambah toko jika tertutup oleh konfirmasi
-      const popupToko = document.getElementById('popupTambahToko');
-      if (popupToko) {
-        popupToko.style.display = 'flex';
-        popupToko.classList.add('show');
+        if (typeof syncAllDataToCache === 'function') {
+          await syncAllDataToCache().catch(() => {});
+        }
+
+        hideLoading();
+        showNotif(`TOKO '${name}' BERHASIL DIHAPUS!`, 'info');
+
+        // Buka kembali modal tambah toko jika tertutup oleh konfirmasi
+        const popupToko = document.getElementById('popupTambahToko');
+        if (popupToko) {
+          popupToko.style.display = 'flex';
+          popupToko.classList.add('show');
+        }
+
+        if (typeof loadDaftarTokoModal === 'function') loadDaftarTokoModal();
+        if (typeof updateStoreDropdownOptions === 'function') updateStoreDropdownOptions();
+        if (typeof loadUsersManagement === 'function') loadUsersManagement();
+      } catch (err) {
+        hideLoading();
+        console.error('[HAPUS TOKO ERROR]:', err);
+        showNotif('GAGAL MENGHAPUS TOKO!', 'error');
       }
-
-      if (typeof loadDaftarTokoModal === 'function') loadDaftarTokoModal();
-      if (typeof updateStoreDropdownOptions === 'function') updateStoreDropdownOptions();
-      if (typeof loadUsersManagement === 'function') loadUsersManagement();
-
-      // 3. PROSES SINKRONISASI BERJALAN DI LATAR BELAKANG
-      callGoogleScript('deleteUser', { userId: id, username: name }, 'POST').catch(e => console.warn(e));
-      executeGoogleSheetActionAndRefresh('deleteStore', { storeId: id, storeName: name });
-    } catch (err) {
-      console.error('[HAPUS TOKO ERROR]:', err);
-      showNotif('TERJADI KESALAHAN SAAT MENGHAPUS TOKO: ' + (err.message || err), 'error');
-    }
+    }, 300);
   });
 }
 window.hapusTokoCustom = hapusTokoCustom;
@@ -9692,26 +10115,53 @@ async function prosesUploadExcelToko(event) {
         saveUsersToDB(users);
       }
 
-      // 3. SINKRONKAN KE GOOGLE APPS SCRIPT DENGAN JEDA DAN AUTO SYNC ULANG
-      showLoading(`MENGIRIM ${addedCount} TOKO KE GOOGLE SPREADSHEET...`);
-      if (newUsersList.length > 0) {
-        callGoogleScript('syncUsers', { users: newUsersList }, 'POST').catch(e => console.warn(e));
+      // 3. SIMPAN KE SUPABASE (TABEL toko_list & users)
+      if (typeof supabase !== 'undefined' && supabase) {
+        try {
+          const supaStoresPayload = newStoresList.map(s => ({
+            id: s.id,
+            full_name: s.fullName,
+            area: s.area,
+            store_code: s.storeCode,
+            created_by: s.createdBy
+          }));
+          await supabase.from('toko_list').upsert(supaStoresPayload);
+
+          if (newUsersList.length > 0) {
+            const supaUsersPayload = newUsersList.map(u => ({
+              id: u.id,
+              username: u.username,
+              password: u.password,
+              full_name: u.fullName,
+              store_code: u.storeCode,
+              phone: u.phone,
+              category: u.category,
+              area: u.area,
+              created_at: u.createdAt
+            }));
+            await supabase.from('users').upsert(supaUsersPayload);
+          }
+        } catch(sbErr) {
+          console.warn('[SUPABASE BATCH UPLOAD STORES WARNING]:', sbErr);
+        }
       }
-      await executeGoogleSheetActionAndRefresh('syncStores', { stores: newStoresList }, 800);
 
-      showNotif(`BERHASIL MENGUNGGAH ${addedCount} TOKO BARU! (${skippedCount} DUPLIKAT DILEWATI)`, 'success');
-      event.target.value = '';
-
-    } catch(err) {
-      console.error('[EXCEL UPLOAD TOKO ERROR]:', err);
-      showNotif('GAGAL MEMBACA FILE EXCEL: ' + (err.message || err), 'error');
-      event.target.value = '';
-    } finally {
+      pushCentralCloudDB();
       hideLoading();
+
+      showNotif(`BERHASIL MENGUNGGAH ${addedCount} TOKO BARU (KOLOM A = NAMA, KOLOM B = AREA)! (${skippedCount} DUPLIKAT DILEWATI)`, 'success');
+      event.target.value = '';
+
       if (typeof loadDaftarTokoModal === 'function') loadDaftarTokoModal();
       if (typeof updateStoreDropdownOptions === 'function') updateStoreDropdownOptions();
       if (typeof loadUsersManagement === 'function') loadUsersManagement();
       if (typeof loadForm === 'function') loadForm();
+
+    } catch(err) {
+      hideLoading();
+      console.error('[EXCEL UPLOAD TOKO ERROR]:', err);
+      showNotif('GAGAL MEMBACA FILE EXCEL: ' + (err.message || err), 'error');
+      event.target.value = '';
     }
   };
 
@@ -9806,7 +10256,10 @@ function showConfirm(msg, callback) {
   if (msgEl) msgEl.innerHTML = msg;
   confirmCallback = callback;
   const modal = document.getElementById('confirmOverlay');
-  if (modal) modal.style.display = 'flex';
+  if (modal) {
+    modal.style.setProperty('z-index', '999999999', 'important');
+    modal.style.setProperty('display', 'flex', 'important');
+  }
   pushPopupHistoryState();
 }
 
@@ -9888,7 +10341,10 @@ function showNotif(msg, type = 'info') {
     }
   }
 
-  notifOverlay.style.display = 'flex';
+  if (notifOverlay) {
+    notifOverlay.style.setProperty('z-index', '9999999999', 'important');
+    notifOverlay.style.setProperty('display', 'flex', 'important');
+  }
 }
 
 function closePopup() {
@@ -9901,38 +10357,15 @@ function closePopup() {
   }
 }
 
-function showLoading(msg = 'MEMUAT DATA TERBARU...', submsg = '') {
+function showLoading() {
   const modal = document.getElementById('loadingOverlay');
-  const textEl = document.getElementById('loadingText');
-  const subEl = document.getElementById('loadingSubtext');
-  
-  if (textEl) {
-    textEl.textContent = msg || 'MEMUAT DATA TERBARU...';
-  }
-  if (subEl) {
-    if (submsg) {
-      subEl.textContent = submsg;
-      subEl.style.display = 'block';
-    } else {
-      subEl.textContent = 'Mohon tunggu sebentar';
-      subEl.style.display = 'block';
-    }
-  }
-  if (modal) {
-    modal.style.display = 'flex';
-    modal.style.setProperty('display', 'flex', 'important');
-  }
+  if (modal) modal.style.display = 'flex';
 }
-window.showLoading = showLoading;
 
 function hideLoading() {
   const modal = document.getElementById('loadingOverlay');
-  if (modal) {
-    modal.style.display = 'none';
-    modal.style.setProperty('display', 'none', 'important');
-  }
+  if (modal) modal.style.display = 'none';
 }
-window.hideLoading = hideLoading;
 
 let currentZoom = 1;
 let panX = 0;

@@ -14,9 +14,12 @@
   <!-- Libraries -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- WAJIB ADA: Library Supabase Client agar database engine dapat berjalan -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js"></script>
+
   <!-- Master Stylesheet -->
-  <link rel="stylesheet" href="styles.css?v=20260811_v1370">
-  <script src="app.js?v=20260811_v1374"></script>
+  <link rel="stylesheet" href="styles.css?v=20260811_v1360">
+  <script src="app.js?v=20260811_v1360"></script>
 
   <!-- Firebase App, Firestore & Realtime Database Web SDK (Compat Mode) -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
@@ -378,38 +381,6 @@
          6. USER MANAGEMENT & SETTINGS PAGE (ADMIN TSM - WITH KODE TOKO FIELD)
          ========================================================================== -->
     <section id="userManagementPage" class="page">
-      <!-- GOOGLE APPS SCRIPT / GOOGLE SHEETS DATABASE INTEGRATION -->
-      <div class="box" style="border-left: 4px solid #059669; margin-bottom: 20px; background: linear-gradient(135deg, rgba(5, 150, 105, 0.08), rgba(16, 185, 129, 0.03)); box-shadow: 0 4px 14px rgba(5, 150, 105, 0.08);">
-        <h3 style="color: #059669; display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-weight: 900;">
-          <span class="material-symbols-rounded" style="font-size: 24px;">table_chart</span> PENGATURAN DATABASE GOOGLE SHEETS (GOOGLE APPS SCRIPT)
-        </h3>
-        <p style="font-size: 12.5px; color: var(--text-muted); margin-bottom: 12px;">
-          SELURUH DATA (PERMINTAAN, USER, TOKO, TTD, CHAT & PENGATURAN) DISIMPAN LANGSUNG KE GOOGLE SPREADSHEET GOOGLE DRIVE ANDA SECARA OTOMATIS & REAL-TIME.
-        </p>
-
-        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px;">
-          <input type="url" id="googleScriptUrlInput" placeholder="MASUKKAN URL GOOGLE APPS SCRIPT (akhiran /exec)" style="flex: 1; min-width: 280px; padding: 12px; font-family: monospace; font-size: 12px;">
-          <button type="button" class="btnDownload" style="background: #059669; height: 44px; font-weight: 800;" onclick="simpanGoogleScriptUrl()">
-            <span class="material-symbols-rounded">save</span> SIMPAN URL GOOGLE SHEETS
-          </button>
-        </div>
-
-        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-          <button type="button" class="btnDownload" style="background: #0284c7; height: 38px; padding: 0 14px; font-weight: 700;" onclick="tesKoneksiGoogleSheets()">
-            <span class="material-symbols-rounded">wifi_tethering</span> TEST KONEKSI GOOGLE SHEETS
-          </button>
-          <button type="button" class="btnDownload" style="background: #16a34a; height: 38px; padding: 0 14px; font-weight: 700;" onclick="sinkronkanSemuaKeGoogleSheets()">
-            <span class="material-symbols-rounded">cloud_upload</span> SINKRONKAN SEMUA KE SPREADSHEET
-          </button>
-          <button type="button" class="btnDownload" style="background: #7c3aed; height: 38px; padding: 0 14px; font-weight: 700;" onclick="tarikSemuaDariGoogleSheets()">
-            <span class="material-symbols-rounded">cloud_download</span> TARIK DARI SPREADSHEET
-          </button>
-          <button type="button" class="btnDownload" style="background: #ea580c; height: 38px; padding: 0 14px; font-weight: 700;" onclick="bukaPetunjukGoogleScript()">
-            <span class="material-symbols-rounded">code</span> PETUNJUK KODE APPS SCRIPT (Code.gs)
-          </button>
-        </div>
-      </div>
-
       <!-- FONTE WHATSAPP AUTOMATION TOKEN CONFIGURATION -->
       <div class="box" style="border-left: 4px solid #16a34a; margin-bottom: 20px;">
         <h3 style="color: #16a34a; display: flex; align-items: center; gap: 8px;">
@@ -873,7 +844,7 @@
   </div>
 
   <!-- 3. POPUP CONFIRMATION MODAL (YES/NO HALF SCREEN COMPACT CARD) -->
-  <div id="confirmOverlay" class="popupOverlay" style="z-index: 10000000;">
+  <div id="confirmOverlay" class="popupOverlay" style="z-index: 999999999 !important;">
     <div class="popupNotifCard" id="confirmBoxCard" style="width: 420px !important; max-width: 90vw !important; margin: auto !important; border-radius: 18px !important; overflow: hidden !important;">
       <div class="popupNotifBody" style="padding: 22px 20px 16px 20px; text-align: center;">
         <span class="material-symbols-rounded" style="font-size: 36px; color: var(--primary); margin-bottom: 8px; display: block;">help</span>
@@ -887,7 +858,7 @@
   </div>
 
   <!-- 4. CLEAN & ATTRACTIVE NOTIFICATION DIALOG MODAL (OK HALF SCREEN COMPACT CARD) -->
-  <div id="popupNotif" class="popupOverlay" style="z-index: 10000000;">
+  <div id="popupNotif" class="popupOverlay" style="z-index: 9999999999 !important;">
     <div class="popupNotifCard" id="popupNotifCard" style="width: 420px !important; max-width: 90vw !important; margin: auto !important; border-radius: 18px !important; overflow: hidden !important;">
       <div class="popupNotifBody" style="padding: 22px 20px 16px 20px; text-align: center;">
         <span id="popupNotifIcon" class="material-symbols-rounded" style="font-size: 36px; color: var(--primary); margin-bottom: 8px; display: block;">info</span>
@@ -900,7 +871,7 @@
   </div>
 
   <!-- 5. POPUP REJECT REASON MODAL (HALF SCREEN COMPACT CARD) -->
-  <div id="rejectOverlay" class="popupOverlay">
+  <div id="rejectOverlay" class="popupOverlay" style="z-index: 500000; display: none;">
     <div class="rejectBoxPopup" style="width: 440px !important; max-width: 90vw !important; margin: auto !important; border-radius: 18px !important; overflow: hidden !important; background: var(--bg-box) !important; border: 1px solid var(--border-color) !important; box-shadow: 0 20px 50px rgba(0,0,0,0.45) !important;">
       <div class="rejectHeaderPopup" style="background: linear-gradient(135deg, #ef4444, #dc2626); color: #ffffff; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;">
         <span style="display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 800;"><span class="material-symbols-rounded">cancel</span> <span id="rejectTitle">TOLAK PERMINTAAN</span></span>
@@ -920,7 +891,7 @@
   </div>
 
   <!-- 6. POPUP UPLOAD BUKTI PROSES ARTEMIS MODAL (HALF SCREEN COMPACT CARD) -->
-  <div id="artemisOverlay" class="popupOverlay" style="z-index: 10000000; display: none;">
+  <div id="artemisOverlay" class="popupOverlay" style="z-index: 500000; display: none;">
     <div class="artemisBoxPopup" style="width: 460px !important; max-width: 92vw !important; margin: auto !important; border-radius: 18px !important; overflow: hidden !important; background: var(--bg-box) !important; border: 1px solid var(--border-color) !important; box-shadow: 0 20px 50px rgba(0,0,0,0.45) !important;">
       <div class="artemisHeaderPopup" style="background: var(--primary); color: #ffffff; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;">
         <span style="display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 800; color: #ffffff;"><span class="material-symbols-rounded" style="font-size: 22px;">photo_camera</span> <span id="artemisTitle">BUKTI PROSES ARTEMIS</span></span>
@@ -1083,45 +1054,6 @@
         </div>
       </div>
     </div>
-  <!-- POPUP PETUNJUK GOOGLE APPS SCRIPT (Code.gs) -->
-  <div id="popupGoogleScriptGuide" class="popupOverlay" style="z-index: 1000000; align-items: flex-start; padding-top: 12px;">
-    <div class="popupBox" style="width: 750px; max-width: 95vw; max-height: 90vh; display: flex; flex-direction: column; padding: 0; border-radius: 16px; overflow: hidden; background: var(--bg-box);">
-      <div class="popupHeader" style="background: linear-gradient(135deg, #059669, #047857); padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;">
-        <span style="font-size: 15px; font-weight: 900; color: #fff; display: flex; align-items: center; gap: 8px;">
-          <span class="material-symbols-rounded">table_chart</span> PANDUAN PEMASANGAN GOOGLE APPS SCRIPT (Code.gs)
-        </span>
-        <button type="button" class="popupClose" onclick="tutupPetunjukGoogleScript()">&times;</button>
-      </div>
-      <div class="popupContent" style="flex: 1; overflow-y: auto; padding: 18px; font-size: 13px; line-height: 1.6; color: var(--text-main);">
-        <h4 style="color: #059669; margin-bottom: 8px; font-weight: 800;">Langkah 1: Buat Google Spreadsheet</h4>
-        <p>Buka <a href="https://sheets.new" target="_blank" style="color: var(--primary); font-weight: 700;">sheets.new</a> di browser untuk membuat Google Spreadsheet baru.</p>
-
-        <h4 style="color: #059669; margin-top: 14px; margin-bottom: 8px; font-weight: 800;">Langkah 2: Buka Apps Script</h4>
-        <p>Di Google Spreadsheet tersebut, klik menu <strong>Ekstensi (Extensions)</strong> &gt; <strong>Apps Script</strong>.</p>
-
-        <h4 style="color: #059669; margin-top: 14px; margin-bottom: 8px; font-weight: 800;">Langkah 3: Salin Kode Backend (Code.gs)</h4>
-        <p>Hapus semua isi file default, lalu salin dan tempel kode berikut:</p>
-        <div style="position: relative; margin-bottom: 12px;">
-          <button type="button" class="btnDownload" style="position: absolute; right: 8px; top: 8px; background: #059669; height: 32px; padding: 0 12px; font-size: 11px; z-index: 5;" onclick="salinKodeGoogleScript()">
-            <span class="material-symbols-rounded" style="font-size: 14px;">content_copy</span> SALIN KODE
-          </button>
-          <textarea id="googleScriptCodePreview" readonly style="width: 100%; height: 180px; font-family: monospace; font-size: 11px; padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.06); color: var(--text-main);"></textarea>
-        </div>
-
-        <h4 style="color: #059669; margin-top: 14px; margin-bottom: 8px; font-weight: 800;">Langkah 4: Terapkan Sebagai Aplikasi Web (Deploy as Web App)</h4>
-        <ol style="padding-left: 20px; margin: 0;">
-          <li>Klik tombol biru <strong>Terapkan (Deploy)</strong> &gt; <strong>Penerapan baru (New deployment)</strong>.</li>
-          <li>Pilih jenis: <strong>Aplikasi Web (Web App)</strong>.</li>
-          <li>Jalankan sebagai: <strong>Saya (Email Anda)</strong>.</li>
-          <li>Siapa yang memiliki akses: <strong style="color: #ef4444;">Siapa saja (Anyone)</strong>.</li>
-          <li>Klik <strong>Terapkan</strong> &gt; Berikan izin akses (Authorize access).</li>
-          <li>Salin <strong>URL Aplikasi Web (akhiran /exec)</strong> lalu tempelkan ke kolom URL di Aplikasi Toko ini.</li>
-        </ol>
-      </div>
-      <div class="popupFooter" style="padding: 12px 18px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
-        <button type="button" class="btnBatal" style="padding: 8px 20px; border-radius: 8px;" onclick="tutupPetunjukGoogleScript()">TUTUP</button>
-      </div>
-    </div>
   </div>
 
   <!-- 10. POPUP PDF DOCUMENT PREVIEW MODAL -->
@@ -1174,13 +1106,9 @@
     </div>
   </div>
 
-  <!-- 11. GLOBAL LOADING OVERLAY WITH SPINNING ANIMATION & DYNAMIC TEXT -->
+  <!-- 11. GLOBAL LOADING OVERLAY (TEXTLESS, CENTERED ON ALL DEVICES) -->
   <div id="loadingOverlay">
-    <div class="loadingSpinnerBox">
-      <div class="spinner"></div>
-      <div id="loadingText">MEMUAT DATA TERBARU...</div>
-      <div id="loadingSubtext">Mohon tunggu sebentar</div>
-    </div>
+    <div class="spinner"></div>
   </div>
 </body>
 </html>
