@@ -2136,8 +2136,21 @@ body.design-mode-3d-isometric .dashboardTable th {
   padding: 16px;
 }
 
-#artemisOverlay {
+#artemisOverlay,
+#popupEditStatusPart,
+#popupEditKeteranganPartSingle {
   z-index: 500000 !important;
+}
+
+.btnEditPart, .btnEditPartRow {
+  background: linear-gradient(135deg, #0284c7, #0369a1) !important;
+  color: #ffffff !important;
+  border: none !important;
+}
+.btnEditPart:hover, .btnEditPartRow:hover {
+  background: linear-gradient(135deg, #0369a1, #075985) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
 }
 
 #confirmOverlay,

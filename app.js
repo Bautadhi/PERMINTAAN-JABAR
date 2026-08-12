@@ -5122,6 +5122,21 @@ function bukaRiwayat(status) {
   showPage('riwayatPage');
 }
 
+function isPdfButtonAllowed(req) {
+  if (!req || !currentUser) return false;
+  const role = String(currentUser.category || '').toUpperCase();
+  
+  // TOMBOL PDF TIDAK DIBERIKAN UNTUK ROLE TOKO DAN SALES
+  if (role === 'TOKO' || role === 'SALES') {
+    return false;
+  }
+
+  // TOMBOL PDF HANYA KELUAR JIKA DM JUGA SUDAH APPROVE (STATUS APPROVE ATAU DONE)
+  const isDmApproved = (req.status === 'APPROVE' || req.status === 'DONE');
+  return isDmApproved;
+}
+window.isPdfButtonAllowed = isPdfButtonAllowed;
+
 function loadRiwayat() {
   const dropdown = document.getElementById('filterStatusDropdown');
   if (dropdown && filterStatusRiwayat) {
@@ -5184,115 +5199,109 @@ function filterRiwayat() {
   data.forEach(r => {
     let aksi = '';
 
-    const isAdminUser = currentUser && (currentUser.category === 'ADMIN' || (currentUser.username && currentUser.username.toUpperCase() === 'ADMIN'));
+    const isDeletedRow = (r.status === 'BATAL' || r.unfulfilled === true);
 
-    if (isAdminUser) {
-      if (r.status === 'PENDING' && !r.serviceApprove) {
-        aksi += `
-          <button class="btnIcon btnApprove" onclick="approveService('${r.noSurat}')" title="APPROVE SERVICE"><span class="material-symbols-rounded">check_circle</span></button>
-          <button class="btnIcon btnReject" onclick="tolakServiceModal('${r.noSurat}', 'SERVICE')" title="REJECT SERVICE"><span class="material-symbols-rounded">cancel</span></button>
-        `;
-      } else if (r.status === 'PENDING' && r.serviceApprove) {
-        aksi += `
-          <button class="btnIcon btnApprove" onclick="approveDM('${r.noSurat}')" title="APPROVE DM"><span class="material-symbols-rounded">check_circle</span></button>
-          <button class="btnIcon btnReject" onclick="tolakServiceModal('${r.noSurat}', 'DM')" title="REJECT DM"><span class="material-symbols-rounded">cancel</span></button>
-        `;
-      } else if (r.status === 'APPROVE') {
-        aksi += `
-          <button class="btnIcon btnDone" onclick="doneService('${r.noSurat}')" title="DONE"><span class="material-symbols-rounded">task_alt</span></button>
-        `;
-      }
-    } else if (role === 'SERVICE') {
-      if (r.status === 'PENDING' && !r.serviceApprove) {
-        aksi += `
-          <button class="btnIcon btnApprove" onclick="approveService('${r.noSurat}')" title="APPROVE SERVICE"><span class="material-symbols-rounded">check_circle</span></button>
-          <button class="btnIcon btnReject" onclick="tolakServiceModal('${r.noSurat}', 'SERVICE')" title="REJECT SERVICE"><span class="material-symbols-rounded">cancel</span></button>
-        `;
-      } else if (r.status === 'APPROVE') {
-        aksi += `
-          <button class="btnIcon btnDone" onclick="doneService('${r.noSurat}')" title="DONE"><span class="material-symbols-rounded">task_alt</span></button>
-        `;
-      }
-    } else if (role === 'DM') {
-      if (r.status === 'PENDING' && r.serviceApprove) {
-        aksi += `
-          <button class="btnIcon btnApprove" onclick="approveDM('${r.noSurat}')" title="APPROVE DM"><span class="material-symbols-rounded">check_circle</span></button>
-          <button class="btnIcon btnReject" onclick="tolakServiceModal('${r.noSurat}', 'DM')" title="REJECT DM"><span class="material-symbols-rounded">cancel</span></button>
-        `;
-      }
-    }
-
-    const isOwner = currentUser && (r.userId === currentUser.id || r.createdBy === currentUser.fullName || r.createdBy === currentUser.username);
-    const canEdit = (r.status === 'PENDING' && !r.serviceApprove && isOwner) || (isAdminUser && r.status === 'PENDING');
-    const canDelete = (r.status === 'PENDING' && !r.serviceApprove && isOwner) || isAdminUser;
-
-    if (canEdit) {
-      aksi += `
-        <button class="btnIcon btnEdit" onclick="editPermintaan('${r.noSurat}')" title="EDIT PERMINTAAN"><span class="material-symbols-rounded">edit</span></button>
+    if (isDeletedRow) {
+      // UNTUK BARIS YG SUDAH DI HAPUS: HILANGKAN SEMUA TOMBOL LAINNYA, SISAKAN HANYA ICON MATA (LIHAT DETAIL)
+      aksi = `
+        <button class="btnIcon btnInfo" onclick="lihatDetail('${r.noSurat}')" title="LIHAT DETAIL"><span class="material-symbols-rounded">visibility</span></button>
       `;
-    }
-
-    if (canDelete) {
-      aksi += `
-        <button class="btnIcon btnDelete" onclick="hapusData('${r.noSurat}')" title="HAPUS PERMINTAAN"><span class="material-symbols-rounded">delete</span></button>
-      `;
-    }
-
-    // TOMBOL KHUSUS LOGIN ADMIN TERLETAK DI SEBELAH TOMBOL HAPUS DATA
-    if (isAdminUser) {
-      if (r.serviceApprove) {
-        aksi += `
-          <button class="btnIcon" onclick="batalApproveService('${r.noSurat}')" title="BATAL APPROVE SERVICE (KHUSUS ADMIN)" style="background: #eab308 !important; color: #ffffff !important;"><span class="material-symbols-rounded">undo</span></button>
-        `;
-      }
-      if (r.status === 'APPROVE' || r.dmUserName || r.dmTTD) {
-        aksi += `
-          <button class="btnIcon" onclick="batalApproveDM('${r.noSurat}')" title="BATAL APPROVE DM (KHUSUS ADMIN)" style="background: #f97316 !important; color: #ffffff !important;"><span class="material-symbols-rounded">undo</span></button>
-        `;
-      }
-    }
-
-    aksi += `
-      <button class="btnIcon btnInfo" onclick="lihatDetail('${r.noSurat}')" title="LIHAT DETAIL"><span class="material-symbols-rounded">visibility</span></button>
-    `;
-
-    const hasPhotos = (r.photos && Array.isArray(r.photos) && r.photos.length > 0) || (r.artemisPhotos && Array.isArray(r.artemisPhotos) && r.artemisPhotos.length > 0);
-
-    if (r.status === 'DONE') {
-      if (hasPhotos) {
-        aksi += `
-          <button class="btnIcon btnView" onclick="lihatFotoByNoSurat('${r.noSurat}')" title="BUKTI PROSES ARTEMIS (${(r.artemisPhotos || r.photos).length})" style="background: var(--primary) !important; color: #ffffff !important; box-shadow: 0 4px 10px rgba(0,0,0,0.15) !important;"><span class="material-symbols-rounded" style="font-size: 16px !important;">photo_library</span></button>
-        `;
-      }
     } else {
-      const isPhotoHidden = (r.status === 'APPROVE' || r.status === 'REJECT') || !getFeaturePhotosEnabled();
-      if (hasPhotos && !isPhotoHidden) {
+      const isAdminUser = currentUser && (currentUser.category === 'ADMIN' || (currentUser.username && currentUser.username.toUpperCase() === 'ADMIN'));
+
+      if (isAdminUser) {
+        if (r.status === 'PENDING' && !r.serviceApprove) {
+          aksi += `
+            <button class="btnIcon btnApprove" onclick="approveService('${r.noSurat}')" title="APPROVE SERVICE"><span class="material-symbols-rounded">check_circle</span></button>
+            <button class="btnIcon btnReject" onclick="tolakServiceModal('${r.noSurat}', 'SERVICE')" title="REJECT SERVICE"><span class="material-symbols-rounded">cancel</span></button>
+          `;
+        } else if (r.status === 'PENDING' && r.serviceApprove) {
+          aksi += `
+            <button class="btnIcon btnApprove" onclick="approveDM('${r.noSurat}')" title="APPROVE DM"><span class="material-symbols-rounded">check_circle</span></button>
+            <button class="btnIcon btnReject" onclick="tolakServiceModal('${r.noSurat}', 'DM')" title="REJECT DM"><span class="material-symbols-rounded">cancel</span></button>
+          `;
+        } else if (r.status === 'APPROVE') {
+          aksi += `
+            <button class="btnIcon btnDone" onclick="doneService('${r.noSurat}')" title="DONE"><span class="material-symbols-rounded">task_alt</span></button>
+          `;
+        }
+      } else if (role === 'SERVICE') {
+        if (r.status === 'PENDING' && !r.serviceApprove) {
+          aksi += `
+            <button class="btnIcon btnApprove" onclick="approveService('${r.noSurat}')" title="APPROVE SERVICE"><span class="material-symbols-rounded">check_circle</span></button>
+            <button class="btnIcon btnReject" onclick="tolakServiceModal('${r.noSurat}', 'SERVICE')" title="REJECT SERVICE"><span class="material-symbols-rounded">cancel</span></button>
+          `;
+        } else if (r.status === 'APPROVE') {
+          aksi += `
+            <button class="btnIcon btnDone" onclick="doneService('${r.noSurat}')" title="DONE"><span class="material-symbols-rounded">task_alt</span></button>
+          `;
+        }
+      } else if (role === 'DM') {
+        if (r.status === 'PENDING' && r.serviceApprove) {
+          aksi += `
+            <button class="btnIcon btnApprove" onclick="approveDM('${r.noSurat}')" title="APPROVE DM"><span class="material-symbols-rounded">check_circle</span></button>
+            <button class="btnIcon btnReject" onclick="tolakServiceModal('${r.noSurat}', 'DM')" title="REJECT DM"><span class="material-symbols-rounded">cancel</span></button>
+          `;
+        }
+      }
+
+      const isOwner = currentUser && (r.userId === currentUser.id || r.createdBy === currentUser.fullName || r.createdBy === currentUser.username);
+      const canEdit = (r.status === 'PENDING' && !r.serviceApprove && isOwner) || (isAdminUser && r.status === 'PENDING');
+      const canDelete = (r.status === 'PENDING' && !r.serviceApprove && isOwner) || isAdminUser;
+
+      if (canEdit) {
         aksi += `
-          <button class="btnIcon btnView" onclick="lihatFotoByNoSurat('${r.noSurat}')" title="LIHAT FOTO PERMINTAAN"><span class="material-symbols-rounded">image</span></button>
+          <button class="btnIcon btnEdit" onclick="editPermintaan('${r.noSurat}')" title="EDIT PERMINTAAN"><span class="material-symbols-rounded">edit</span></button>
         `;
       }
-    }
 
-function isPdfButtonAllowed(req) {
-  if (!req || !currentUser) return false;
-  const role = String(currentUser.category || '').toUpperCase();
-  
-  // TOMBOL PDF TIDAK DIBERIKAN UNTUK ROLE TOKO DAN SALES
-  if (role === 'TOKO' || role === 'SALES') {
-    return false;
-  }
+      if (canDelete) {
+        aksi += `
+          <button class="btnIcon btnDelete" onclick="hapusData('${r.noSurat}')" title="HAPUS PERMINTAAN"><span class="material-symbols-rounded">delete</span></button>
+        `;
+      }
 
-  // TOMBOL PDF HANYA KELUAR JIKA DM JUGA SUDAH APPROVE (STATUS APPROVE ATAU DONE)
-  const isDmApproved = (req.status === 'APPROVE' || req.status === 'DONE');
-  return isDmApproved;
-}
-window.isPdfButtonAllowed = isPdfButtonAllowed;
+      // TOMBOL KHUSUS LOGIN ADMIN TERLETAK DI SEBELAH TOMBOL HAPUS DATA
+      if (isAdminUser) {
+        if (r.serviceApprove) {
+          aksi += `
+            <button class="btnIcon" onclick="batalApproveService('${r.noSurat}')" title="BATAL APPROVE SERVICE (KHUSUS ADMIN)" style="background: #eab308 !important; color: #ffffff !important;"><span class="material-symbols-rounded">undo</span></button>
+          `;
+        }
+        if (r.status === 'APPROVE' || r.dmUserName || r.dmTTD) {
+          aksi += `
+            <button class="btnIcon" onclick="batalApproveDM('${r.noSurat}')" title="BATAL APPROVE DM (KHUSUS ADMIN)" style="background: #f97316 !important; color: #ffffff !important;"><span class="material-symbols-rounded">undo</span></button>
+          `;
+        }
+      }
 
-    const isPdfVisible = isPdfButtonAllowed(r);
-    if (isPdfVisible) {
       aksi += `
-        <button class="btnIcon btnPdf" onclick="bukaPdfModal('${r.noSurat}')" title="CETAK PDF"><span class="material-symbols-rounded">picture_as_pdf</span></button>
+        <button class="btnIcon btnInfo" onclick="lihatDetail('${r.noSurat}')" title="LIHAT DETAIL"><span class="material-symbols-rounded">visibility</span></button>
       `;
+
+      const hasPhotos = (r.photos && Array.isArray(r.photos) && r.photos.length > 0) || (r.artemisPhotos && Array.isArray(r.artemisPhotos) && r.artemisPhotos.length > 0);
+
+      if (r.status === 'DONE') {
+        if (hasPhotos) {
+          aksi += `
+            <button class="btnIcon btnView" onclick="lihatFotoByNoSurat('${r.noSurat}')" title="BUKTI PROSES ARTEMIS (${(r.artemisPhotos || r.photos).length})" style="background: var(--primary) !important; color: #ffffff !important; box-shadow: 0 4px 10px rgba(0,0,0,0.15) !important;"><span class="material-symbols-rounded" style="font-size: 16px !important;">photo_library</span></button>
+          `;
+        }
+      } else {
+        const isPhotoHidden = (r.status === 'APPROVE' || r.status === 'REJECT') || !getFeaturePhotosEnabled();
+        if (hasPhotos && !isPhotoHidden) {
+          aksi += `
+            <button class="btnIcon btnView" onclick="lihatFotoByNoSurat('${r.noSurat}')" title="LIHAT FOTO PERMINTAAN"><span class="material-symbols-rounded">image</span></button>
+          `;
+        }
+      }
+
+      const isPdfVisible = isPdfButtonAllowed(r);
+      if (isPdfVisible) {
+        aksi += `
+          <button class="btnIcon btnPdf" onclick="bukaPdfModal('${r.noSurat}')" title="CETAK PDF"><span class="material-symbols-rounded">picture_as_pdf</span></button>
+        `;
+      }
     }
 
     const isWaitingDM = (r.status === 'PENDING' && r.serviceApprove);
@@ -5553,7 +5562,7 @@ function approveService(noSurat) {
           status: requests[idx].status || 'PENDING',
           log: requests[idx].log,
           updated_at: new Date().toISOString()
-        }).eq('no_surat', noSurat).catch(e => console.warn(e));
+        }).eq('no_surat', noSurat).then(() => {}, (e) => console.warn(e));
       }
       if (typeof dbFirestore !== 'undefined' && dbFirestore) {
         dbFirestore.collection('requests').doc(docId).set(requests[idx], { merge: true }).catch(e => console.warn(e));
@@ -5635,7 +5644,7 @@ function approveDM(noSurat) {
           dm_ttd: requests[idx].dmTTD || '',
           log: requests[idx].log,
           updated_at: new Date().toISOString()
-        }).eq('no_surat', noSurat).catch(e => console.warn(e));
+        }).eq('no_surat', noSurat).then(() => {}, (e) => console.warn(e));
       }
       if (typeof dbFirestore !== 'undefined' && dbFirestore) {
         dbFirestore.collection('requests').doc(docId).set(requests[idx], { merge: true }).catch(e => console.warn(e));
@@ -5833,22 +5842,41 @@ function prosesSimpanDoneDenganBuktiArtemis() {
   showConfirm(`SELESAIKAN PERMINTAAN #${noSurat} DAN SIMPAN BUKTI PROSES ARTEMIS?`, () => {
     try {
       const requests = getRequestsFromDB();
-      const idx = requests.findIndex(r => r && (r.noSurat === noSurat || String(r.noSurat) === String(noSurat) || r.id === noSurat));
+      const targetNo = String(noSurat).trim().toUpperCase();
+      const idx = requests.findIndex(r => r && (
+        String(r.noSurat || '').trim().toUpperCase() === targetNo ||
+        String(r.id || '').trim().toUpperCase() === targetNo
+      ));
 
       if (idx !== -1) {
         requests[idx].status = 'DONE';
-        requests[idx].artemisPhotos = [...tempArtemisPhotos];
+        requests[idx].artemisPhotos = Array.isArray(tempArtemisPhotos) ? [...tempArtemisPhotos] : [];
 
         if (!Array.isArray(requests[idx].photos)) requests[idx].photos = [];
-        if (tempArtemisPhotos.length > 0) {
+        if (Array.isArray(tempArtemisPhotos) && tempArtemisPhotos.length > 0) {
           requests[idx].photos = [...requests[idx].photos, ...tempArtemisPhotos];
+        }
+
+        // OTOMATIS: JIKA STATUS DONE, SEMUA ITEM YANG TERPENUHI MAKA KETPART JADI "DIPENUHI"
+        if (Array.isArray(requests[idx].items)) {
+          requests[idx].items.forEach(item => {
+            if (!item.unfulfilled) {
+              if (!item.statusPart && !item.keteranganPart) {
+                item.statusPart = 'DIPENUHI';
+                item.keteranganPart = 'DIPENUHI';
+              }
+            } else {
+              item.statusPart = 'TIDAK DIPENUHI';
+              item.keteranganPart = 'TIDAK DIPENUHI';
+            }
+          });
         }
 
         if (!requests[idx].log) requests[idx].log = [];
         requests[idx].log.push({
           action: 'DONE_WITH_ARTEMIS_PHOTOS',
           user: currentUser ? (currentUser.fullName || currentUser.username) : 'SERVICE',
-          notes: `SELESAI DENGAN ${tempArtemisPhotos.length} BUKTI FOTO ARTEMIS`,
+          notes: `SELESAI DENGAN ${(tempArtemisPhotos || []).length} BUKTI FOTO ARTEMIS`,
           time: `${getFormattedDateDDMMYYYY()} ${new Date().toLocaleTimeString('id-ID')}`
         });
 
@@ -5856,6 +5884,7 @@ function prosesSimpanDoneDenganBuktiArtemis() {
         saveRequestsToDB(requests);
         closeArtemisModal();
         showNotif(`PERMINTAAN #${noSurat} TELAH SELESAI (DONE) & BUKTI FOTO ARTEMIS DISIMPAN!`, 'success');
+        
         tambahNotifikasiSistem(['TOKO', 'SALES', 'DM'], requests[idx].area, `PERMINTAAN #${noSurat} DARI ${requests[idx].toko} TELAH SELESAI (DONE) DENGAN BUKTI PROSES ARTEMIS.`, noSurat);
         loadRiwayat();
         loadDashboard();
@@ -5863,28 +5892,33 @@ function prosesSimpanDoneDenganBuktiArtemis() {
           if (typeof loadMasterDbTable === 'function') loadMasterDbTable();
         }
 
-        // 2. PROSES SYNC SUPABASE DI LATAR BELAKANG
-        const docId = String(noSurat).replace(/[\/\.]/g, '_');
-        if (typeof supabase !== 'undefined' && supabase) {
-          supabase.from('permintaan_toko').update({
-            status: 'DONE',
-            photos: requests[idx].photos,
-            artemis_photos: tempArtemisPhotos,
-            log: requests[idx].log,
-            updated_at: new Date().toISOString()
-          }).eq('no_surat', noSurat).catch(e => console.warn(e));
-        }
-        if (typeof dbFirestore !== 'undefined' && dbFirestore) {
-          dbFirestore.collection('requests').doc(docId).set(requests[idx], { merge: true }).catch(e => console.warn(e));
-        }
-        if (typeof dbRealtime !== 'undefined' && dbRealtime) {
-          dbRealtime.ref(`requests/${docId}`).set(requests[idx]).catch(e => console.warn(e));
+        // 2. PROSES SYNC SUPABASE DI LATAR BELAKANG (ISOLATED NON-BLOCKING)
+        try {
+          const docId = String(noSurat).replace(/[\/\.]/g, '_');
+          if (typeof supabase !== 'undefined' && supabase) {
+            supabase.from('permintaan_toko').update({
+              status: 'DONE',
+              items: requests[idx].items,
+              photos: requests[idx].photos,
+              artemis_photos: requests[idx].artemisPhotos,
+              log: requests[idx].log,
+              updated_at: new Date().toISOString()
+            }).eq('no_surat', noSurat).then(() => {}, (e) => console.warn('[SUPABASE DONE UPDATE NOTICE]:', e));
+          }
+          if (typeof dbFirestore !== 'undefined' && dbFirestore) {
+            dbFirestore.collection('requests').doc(docId).set(requests[idx], { merge: true }).catch(e => console.warn(e));
+          }
+          if (typeof dbRealtime !== 'undefined' && dbRealtime) {
+            dbRealtime.ref(`requests/${docId}`).set(requests[idx]).catch(e => console.warn(e));
+          }
+        } catch(sbErr) {
+          console.warn('[BACKGROUND SYNC NOTICE]:', sbErr);
         }
       } else {
         showNotif('DATA PERMINTAAN TIDAK DITEMUKAN!', 'warning');
       }
     } catch (err) {
-      console.error(err);
+      console.error('[PROSES DONE ERROR]:', err);
       showNotif('GAGAL MENYIMPAN STATUS DONE: ' + (err.message || err), 'danger');
     }
   });
@@ -5931,7 +5965,7 @@ function batalApproveService(noSurat) {
           status: 'PENDING',
           log: requests[idx].log,
           updated_at: new Date().toISOString()
-        }).eq('no_surat', noSurat).catch(e => console.warn(e));
+        }).eq('no_surat', noSurat).then(() => {}, (e) => console.warn(e));
       }
       if (typeof dbFirestore !== 'undefined' && dbFirestore) {
         dbFirestore.collection('requests').doc(docId).set(requests[idx], { merge: true }).catch(e => console.warn(e));
@@ -5983,7 +6017,7 @@ function batalApproveDM(noSurat) {
           dm_ttd: '',
           log: requests[idx].log,
           updated_at: new Date().toISOString()
-        }).eq('no_surat', noSurat).catch(e => console.warn(e));
+        }).eq('no_surat', noSurat).then(() => {}, (e) => console.warn(e));
       }
       if (typeof dbFirestore !== 'undefined' && dbFirestore) {
         dbFirestore.collection('requests').doc(docId).set(requests[idx], { merge: true }).catch(e => console.warn(e));
@@ -6056,7 +6090,7 @@ function kirimReject() {
         catatan: requests[idx].catatan,
         log: requests[idx].log,
         updated_at: new Date().toISOString()
-      }).eq('no_surat', noSurat).catch(e => console.warn(e));
+      }).eq('no_surat', noSurat).then(() => {}, (e) => console.warn(e));
     }
     if (typeof dbFirestore !== 'undefined' && dbFirestore) {
       dbFirestore.collection('requests').doc(docId).set(requests[idx], { merge: true }).catch(e => console.warn(e));
@@ -6210,7 +6244,7 @@ function hapusData(noSurat) {
             items: currentReqs[idx].items,
             log: currentReqs[idx].log,
             updated_at: new Date().toISOString()
-          }).eq('no_surat', noSurat).catch(e => console.warn(e));
+          }).eq('no_surat', noSurat).then(() => {}, (e) => console.warn(e));
         }
         if (typeof dbFirestore !== 'undefined' && dbFirestore) {
           dbFirestore.collection('requests').doc(docId).set(currentReqs[idx], { merge: true }).catch(e => console.warn(e));
@@ -6452,16 +6486,23 @@ async function lihatDetail(noSuratOrObj, fromDashboard = false) {
     try { itemsList = JSON.parse(rawItems || '[]'); } catch (e) { itemsList = []; }
   }
 
-  const thStyleCenter = "width: 55px !important; text-align: center !important; background: var(--primary) !important; color: #ffffff !important; padding: 7px 10px !important; border: 1px solid var(--border-color) !important; position: sticky !important; top: 0 !important; z-index: 100 !important; box-shadow: none !important; text-shadow: none !important;";
-  const thStyleQty = "width: 60px !important; text-align: center !important; background: var(--primary) !important; color: #ffffff !important; padding: 7px 10px !important; border: 1px solid var(--border-color) !important; position: sticky !important; top: 0 !important; z-index: 100 !important; box-shadow: none !important; text-shadow: none !important;";
-  const thStyleLeft = (widthPct) => `width: ${widthPct} !important; text-align: center !important; background: var(--primary) !important; color: #ffffff !important; padding: 7px 10px !important; border: 1px solid var(--border-color) !important; position: sticky !important; top: 0 !important; z-index: 100 !important; box-shadow: none !important; text-shadow: none !important;`;
+  const thBase = "background: var(--primary) !important; color: #ffffff !important; padding: 8px 10px !important; border: 1px solid var(--border-color) !important; position: sticky !important; top: 0 !important; z-index: 100 !important; font-size: 11.5px !important; font-weight: 700 !important; letter-spacing: 0.3px !important; box-shadow: none !important; text-shadow: none !important;";
+  const thStyleAutofit = `${thBase} width: 1% !important; white-space: nowrap !important; text-align: center !important;`;
+  const thStyleLeft = `${thBase} text-align: left !important;`;
 
-  const tdStyle = "padding: 7px 10px !important; border: 1px solid var(--border-color) !important; background: var(--bg-box) !important; color: var(--text-main) !important; font-size: 12px !important; vertical-align: middle !important; white-space: nowrap !important; text-align: left !important;";
+  const tdBase = "padding: 8px 10px !important; border: 1px solid var(--border-color) !important; background: var(--bg-box) !important; color: var(--text-main) !important; font-size: 12px !important; vertical-align: middle !important;";
+  const tdStyleAutofit = `${tdBase} width: 1% !important; white-space: nowrap !important; text-align: center !important;`;
+  const tdStyleLeft = `${tdBase} text-align: left !important;`;
 
-  const role = currentUser ? currentUser.category : '';
-  const isAdminUser = currentUser && (currentUser.category === 'ADMIN' || (currentUser.username && currentUser.username.toUpperCase() === 'ADMIN'));
+  const role = currentUser ? (currentUser.category || '').toUpperCase() : '';
+  const isAdminUser = currentUser && (role === 'ADMIN' || (currentUser.username && currentUser.username.toUpperCase() === 'ADMIN'));
   const isServiceUser = (role === 'SERVICE' || isAdminUser);
-  const canServiceRowDelete = isServiceUser && req.status !== 'DONE';
+  
+  // HANYA MUNCUL TOMBOL AKSI BARIS (TIDAK DIPENUHI & EDIT KETERANGAN PART) APABILA STATUSNYA SUDAH APPROVE
+  const canServiceRowActions = isServiceUser && (req.status === 'APPROVE');
+  
+  // KOLOM KETERANGAN PART HANYA DITAMPILKAN JIKA STATUS APPROVE ATAU DONE (PENDING & REJECT TIDAK DITAMPILKAN)
+  const showKetPartCol = (req.status === 'APPROVE' || req.status === 'DONE');
 
   let itemsHtml = itemsList.map((i, idx) => {
     const isUnfulfilled = i.unfulfilled === true;
@@ -6474,49 +6515,96 @@ async function lihatDetail(noSuratOrObj, fromDashboard = false) {
     const alasanVal = i.alasan || i.keterangan || '-';
     const qtyVal = i.qty || i.jumlah || 1;
 
+    // RENDER BADGE NO / STATUS PART (OTOMATIS 'DIPENUHI' JIKA STATUS DONE DAN TERPENUHI)
+    let statusPartVal = (i.statusPart || i.keteranganPart || i.noPart || '').trim();
+    if (req.status === 'DONE' && !isUnfulfilled && !statusPartVal) {
+      statusPartVal = 'DIPENUHI';
+    }
+
+    let statusPartBadgeHtml = '<span style="color: var(--text-muted); font-size: 11px;">-</span>';
+    if (isUnfulfilled) {
+      statusPartBadgeHtml = `<span style="display: inline-block; padding: 2px 7px; border-radius: 6px; font-weight: 700; font-size: 11px; background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid #ef4444;">TIDAK DIPENUHI</span>`;
+    } else if (statusPartVal) {
+      const up = statusPartVal.toUpperCase();
+      let badgeBg = 'rgba(2, 132, 199, 0.12)';
+      let badgeColor = '#0284c7';
+      let badgeBorder = '#0284c7';
+      if (up.includes('DIPENUHI') || up.includes('READY') || up.includes('TERSEDIA') || up.includes('TERPASANG')) {
+        badgeBg = 'rgba(16, 185, 129, 0.15)';
+        badgeColor = '#10b981';
+        badgeBorder = '#10b981';
+      } else if (up.includes('INDENT') || up.includes('ORDER') || up.includes('PROSES') || up.includes('PESAN')) {
+        badgeBg = 'rgba(245, 158, 11, 0.15)';
+        badgeColor = '#f59e0b';
+        badgeBorder = '#f59e0b';
+      } else if (up.includes('BATAL') || up.includes('KOSONG') || up.includes('TIDAK DIPENUHI')) {
+        badgeBg = 'rgba(239, 68, 68, 0.15)';
+        badgeColor = '#ef4444';
+        badgeBorder = '#ef4444';
+      }
+      statusPartBadgeHtml = `<span style="display: inline-block; padding: 2px 7px; border-radius: 6px; font-weight: 700; font-size: 11px; background: ${badgeBg}; color: ${badgeColor}; border: 1px solid ${badgeBorder};">${statusPartVal}</span>`;
+    }
+
+    let ketPartTdHtml = showKetPartCol ? `<td style="${tdStyleLeft} ${strikeStyle}">${statusPartBadgeHtml}</td>` : '';
+
     let actionTdHtml = '';
-    if (canServiceRowDelete) {
+    if (canServiceRowActions) {
+      let unfulfilledBtn = '';
       if (isUnfulfilled) {
-        actionTdHtml = `
-          <td style="${tdStyle} text-align: center !important;">
-            <button type="button" class="btnIcon btnUndo" onclick="undoBarisItemDetailAdmin('${req.noSurat}', ${idx})" title="BATALKAN (UNDO)" style="padding: 3px 6px !important; border-radius: 6px !important; line-height: 1 !important; height: auto !important; background: #f59e0b !important; color: #ffffff !important; border: none !important; cursor: pointer !important;">
-              <span class="material-symbols-rounded" style="font-size: 15px !important;">undo</span>
-            </button>
-          </td>
+        unfulfilledBtn = `
+          <button type="button" class="btnIcon btnUndo" onclick="undoBarisItemDetailAdmin('${req.noSurat}', ${idx})" title="BATALKAN (UNDO)" style="padding: 3px 6px !important; border-radius: 6px !important; line-height: 1 !important; height: auto !important; background: #f59e0b !important; color: #ffffff !important; border: none !important; cursor: pointer !important;">
+            <span class="material-symbols-rounded" style="font-size: 15px !important;">undo</span>
+          </button>
         `;
       } else {
-        actionTdHtml = `
-          <td style="${tdStyle} text-align: center !important;">
-            <button type="button" class="btnIcon btnDelete" onclick="hapusBarisItemDetailAdmin('${req.noSurat}', ${idx})" title="TANDAI TIDAK DIPENUHI" style="padding: 3px 6px !important; border-radius: 6px !important; line-height: 1 !important; height: auto !important; background: #ef4444 !important; color: #ffffff !important; border: none !important; cursor: pointer !important;">
-              <span class="material-symbols-rounded" style="font-size: 15px !important;">cancel</span>
-            </button>
-          </td>
+        unfulfilledBtn = `
+          <button type="button" class="btnIcon btnDelete" onclick="hapusBarisItemDetailAdmin('${req.noSurat}', ${idx})" title="TANDAI TIDAK DIPENUHI" style="padding: 3px 6px !important; border-radius: 6px !important; line-height: 1 !important; height: auto !important; background: #ef4444 !important; color: #ffffff !important; border: none !important; cursor: pointer !important;">
+            <span class="material-symbols-rounded" style="font-size: 15px !important;">cancel</span>
+          </button>
         `;
       }
+
+      // TOMBOL EDIT KETERANGAN PART (MANUAL FREE TEXT) PERSIS DI SEBELAH TOMBOL TIDAK DIPENUHI
+      const editPartBtn = `
+        <button type="button" class="btnIcon btnEditPartRow" onclick="bukaModalEditKetPartSingle('${req.noSurat}', ${idx})" title="EDIT KETERANGAN / NO PART (FREE TEXT)" style="padding: 3px 6px !important; border-radius: 6px !important; line-height: 1 !important; height: auto !important; background: #0284c7 !important; color: #ffffff !important; border: none !important; cursor: pointer !important; margin-left: 4px !important;">
+          <span class="material-symbols-rounded" style="font-size: 15px !important;">edit_note</span>
+        </button>
+      `;
+
+      actionTdHtml = `
+        <td style="${tdStyleAutofit}">
+          <div style="display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
+            ${unfulfilledBtn}
+            ${editPartBtn}
+          </div>
+        </td>
+      `;
     }
 
     if (isDus) {
       return `
         <tr style="${isUnfulfilled ? 'background: rgba(239, 68, 68, 0.08) !important;' : ''}">
-          <td style="${tdStyle} text-align: center !important; ${strikeStyle}">${idx + 1}</td>
-          <td style="${tdStyle} text-align: left !important; ${strikeStyle}">${typeVal}</td>
-          <td style="${tdStyle} text-align: left !important; ${strikeStyle}">${seriVal}</td>
-          <td style="${tdStyle} text-align: left !important; ${strikeStyle}">${barangVal}</td>
-          <td style="${tdStyle} text-align: left !important; color: #d97706 !important; font-weight: 600 !important; ${strikeStyle}">${dusVal}</td>
-          <td style="${tdStyle} text-align: left !important; ${strikeStyle}">${alasanVal}</td>
-          <td style="${tdStyle} text-align: center !important; ${strikeStyle}">${qtyVal}</td>
+          <td style="${tdStyleAutofit} ${strikeStyle}">${idx + 1}</td>
+          <td style="${tdStyleLeft} ${strikeStyle}">${typeVal}</td>
+          <td style="${tdStyleLeft} ${strikeStyle}">${seriVal}</td>
+          <td style="${tdStyleLeft} ${strikeStyle}">${barangVal}</td>
+          <td style="${tdStyleLeft} color: #d97706 !important; font-weight: 600 !important; ${strikeStyle}">${dusVal}</td>
+          <td style="${tdStyleLeft} ${strikeStyle}">${alasanVal}</td>
+          <td style="${tdStyleAutofit} font-weight: 700 !important; ${strikeStyle}">${qtyVal}</td>
+          ${ketPartTdHtml}
           ${actionTdHtml}
         </tr>
       `;
     } else {
       return `
         <tr style="${isUnfulfilled ? 'background: rgba(239, 68, 68, 0.08) !important;' : ''}">
-          <td style="${tdStyle} text-align: center !important; ${strikeStyle}">${idx + 1}</td>
-          <td style="${tdStyle} text-align: left !important; ${strikeStyle}">${typeVal}</td>
-          <td style="${tdStyle} text-align: left !important; ${strikeStyle}">${seriVal}</td>
-          <td style="${tdStyle} text-align: left !important; ${strikeStyle}">${barangVal}</td>
-          <td style="${tdStyle} text-align: left !important; ${strikeStyle}">${alasanVal}</td>
-          <td style="${tdStyle} text-align: center !important; ${strikeStyle}">${qtyVal}</td>
+          <td style="${tdStyleAutofit} ${strikeStyle}">${idx + 1}</td>
+          <td style="${tdStyleLeft} ${strikeStyle}">${typeVal}</td>
+          <td style="${tdStyleLeft} ${strikeStyle}">${seriVal}</td>
+          <td style="${tdStyleLeft} ${strikeStyle}">${barangVal}</td>
+          <td style="${tdStyleLeft} ${strikeStyle}">${alasanVal}</td>
+          <td style="${tdStyleAutofit} font-weight: 700 !important; ${strikeStyle}">${qtyVal}</td>
+          ${ketPartTdHtml}
           ${actionTdHtml}
         </tr>
       `;
@@ -6526,20 +6614,37 @@ async function lihatDetail(noSuratOrObj, fromDashboard = false) {
   let bottomActionsHtml = '';
   let actionButtons = [];
 
-  if (req.status === 'PENDING') {
-    if (role === 'SERVICE' || isAdminUser) {
-      if (!req.serviceApprove) {
-        actionButtons.push(`
-          <button type="button" class="btnIcon btnApprove btnIconOnly" title="APPROVE" onclick="tutupDetailBarangV2(); approveService('${req.noSurat}');">
-            <span class="material-symbols-rounded">check_circle</span>
-          </button>
-        `);
-        actionButtons.push(`
-          <button type="button" class="btnIcon btnReject btnIconOnly" title="TOLAK" onclick="tutupDetailBarangV2(); tolakServiceModal('${req.noSurat}', 'SERVICE');">
-            <span class="material-symbols-rounded">cancel</span>
-          </button>
-        `);
-      } else if (isAdminUser) {
+  const isDeletedReq = (req.status === 'BATAL' || req.unfulfilled === true);
+
+  if (!isDeletedReq) {
+    if (req.status === 'PENDING') {
+      if (role === 'SERVICE' || isAdminUser) {
+        if (!req.serviceApprove) {
+          actionButtons.push(`
+            <button type="button" class="btnIcon btnApprove btnIconOnly" title="APPROVE" onclick="tutupDetailBarangV2(); approveService('${req.noSurat}');">
+              <span class="material-symbols-rounded">check_circle</span>
+            </button>
+          `);
+          actionButtons.push(`
+            <button type="button" class="btnIcon btnReject btnIconOnly" title="TOLAK" onclick="tutupDetailBarangV2(); tolakServiceModal('${req.noSurat}', 'SERVICE');">
+              <span class="material-symbols-rounded">cancel</span>
+            </button>
+          `);
+        } else if (isAdminUser) {
+          actionButtons.push(`
+            <button type="button" class="btnIcon btnApprove btnIconOnly" title="APPROVE" onclick="tutupDetailBarangV2(); approveDM('${req.noSurat}');">
+              <span class="material-symbols-rounded">check_circle</span>
+            </button>
+          `);
+          actionButtons.push(`
+            <button type="button" class="btnIcon btnReject btnIconOnly" title="TOLAK" onclick="tutupDetailBarangV2(); tolakServiceModal('${req.noSurat}', 'DM');">
+              <span class="material-symbols-rounded">cancel</span>
+            </button>
+          `);
+        }
+      }
+      
+      if (role === 'DM' && req.serviceApprove) {
         actionButtons.push(`
           <button type="button" class="btnIcon btnApprove btnIconOnly" title="APPROVE" onclick="tutupDetailBarangV2(); approveDM('${req.noSurat}');">
             <span class="material-symbols-rounded">check_circle</span>
@@ -6552,80 +6657,67 @@ async function lihatDetail(noSuratOrObj, fromDashboard = false) {
         `);
       }
     }
-    
-    if (role === 'DM' && req.serviceApprove) {
+
+    const isPdfVisible = isPdfButtonAllowed(req);
+    if (isPdfVisible) {
       actionButtons.push(`
-        <button type="button" class="btnIcon btnApprove btnIconOnly" title="APPROVE" onclick="tutupDetailBarangV2(); approveDM('${req.noSurat}');">
-          <span class="material-symbols-rounded">check_circle</span>
-        </button>
-      `);
-      actionButtons.push(`
-        <button type="button" class="btnIcon btnReject btnIconOnly" title="TOLAK" onclick="tutupDetailBarangV2(); tolakServiceModal('${req.noSurat}', 'DM');">
-          <span class="material-symbols-rounded">cancel</span>
+        <button type="button" class="btnIcon btnPdf btnIconOnly" title="CETAK PDF" onclick="tutupDetailBarangV2(); bukaPdfModal('${req.noSurat}');">
+          <span class="material-symbols-rounded">picture_as_pdf</span>
         </button>
       `);
     }
-  }
 
-  const isPdfVisible = isPdfButtonAllowed(req);
-  if (isPdfVisible) {
-    actionButtons.push(`
-      <button type="button" class="btnIcon btnPdf btnIconOnly" title="CETAK PDF" onclick="tutupDetailBarangV2(); bukaPdfModal('${req.noSurat}');">
-        <span class="material-symbols-rounded">picture_as_pdf</span>
-      </button>
-    `);
-  }
-
-  if (req.status === 'APPROVE' && (role === 'SERVICE' || isAdminUser)) {
-    actionButtons.push(`
-      <button type="button" class="btnIcon btnDone btnIconOnly" title="SET DONE" onclick="tutupDetailBarangV2(); doneService('${req.noSurat}');">
-        <span class="material-symbols-rounded">task_alt</span>
-      </button>
-    `);
-  }
-
-  if (canServiceRowDelete) {
-    actionButtons.push(`
-      <button type="button" class="btnIcon btnSave btnIconOnly" title="SIMPAN PERUBAHAN KE CLOUD" onclick="simpanPerubahanDetailAdmin('${req.noSurat}');" style="background: #059669 !important; color: #ffffff !important;">
-        <span class="material-symbols-rounded">save</span>
-      </button>
-    `);
-  }
-
-  // BATAL APPROVE SERVICE / DM BUTTONS EXCLUSIVELY VISIBLE FOR ADMIN LOGIN ACCOUNT ONLY (HILANGKAN DARI SERVICE, DM, TOKO, SALES)
-  if (isAdminUser) {
-    if (req.serviceApprove) {
+    if (req.status === 'APPROVE' && (role === 'SERVICE' || isAdminUser)) {
       actionButtons.push(`
-        <button type="button" class="btnIcon btnIconOnly" title="BATAL APPROVE SERVICE" onclick="tutupDetailBarangV2(); batalApproveService('${req.noSurat}');" style="background: #eab308 !important; color: #ffffff !important;">
-          <span class="material-symbols-rounded">undo</span>
+        <button type="button" class="btnIcon btnDone btnIconOnly" title="SET DONE" onclick="tutupDetailBarangV2(); doneService('${req.noSurat}');">
+          <span class="material-symbols-rounded">task_alt</span>
         </button>
       `);
     }
-    if (req.status === 'APPROVE' || req.dmUserName || req.dmTTD) {
+
+    if (canServiceRowActions) {
       actionButtons.push(`
-        <button type="button" class="btnIcon btnIconOnly" title="BATAL APPROVE DM" onclick="tutupDetailBarangV2(); batalApproveDM('${req.noSurat}');" style="background: #f97316 !important; color: #ffffff !important;">
-          <span class="material-symbols-rounded">undo</span>
+        <button type="button" class="btnIcon btnSave btnIconOnly" title="SIMPAN PERUBAHAN KE CLOUD" onclick="simpanPerubahanDetailAdmin('${req.noSurat}');" style="background: #059669 !important; color: #ffffff !important;">
+          <span class="material-symbols-rounded">save</span>
         </button>
       `);
     }
-  }
 
-  const isCreator = currentUser && (req.userId === currentUser.id || req.createdBy === currentUser.fullName || (currentUser.category === 'TOKO' && req.toko.toUpperCase() === currentUser.fullName.toUpperCase()));
-  const canCreatorEditDelete = isCreator && !req.serviceApprove && req.status === 'PENDING';
-  const canServiceEditDelete = (role === 'SERVICE' && !req.serviceApprove && req.status === 'PENDING');
-  const canAdminEditDelete = isAdminUser;
+    // BATAL APPROVE SERVICE / DM BUTTONS EXCLUSIVELY VISIBLE FOR ADMIN LOGIN ACCOUNT ONLY (HILANGKAN DARI SERVICE, DM, TOKO, SALES)
+    if (isAdminUser) {
+      if (req.serviceApprove) {
+        actionButtons.push(`
+          <button type="button" class="btnIcon btnIconOnly" title="BATAL APPROVE SERVICE" onclick="tutupDetailBarangV2(); batalApproveService('${req.noSurat}');" style="background: #eab308 !important; color: #ffffff !important;">
+            <span class="material-symbols-rounded">undo</span>
+          </button>
+        `);
+      }
+      if (req.status === 'APPROVE' || req.dmUserName || req.dmTTD) {
+        actionButtons.push(`
+          <button type="button" class="btnIcon btnIconOnly" title="BATAL APPROVE DM" onclick="tutupDetailBarangV2(); batalApproveDM('${req.noSurat}');" style="background: #f97316 !important; color: #ffffff !important;">
+            <span class="material-symbols-rounded">undo</span>
+          </button>
+        `);
+      }
+    }
 
-  if (canCreatorEditDelete || canServiceEditDelete || canAdminEditDelete) {
-    actionButtons.push(`
-      <button type="button" class="btnIcon btnEdit btnIconOnly" title="EDIT" onclick="tutupDetailBarangV2(); editPermintaan('${req.noSurat}');">
-        <span class="material-symbols-rounded">edit</span>
-      </button>
-    `);
-    actionButtons.push(`
-      <button type="button" class="btnIcon btnDelete btnIconOnly" title="HAPUS PERMINTAAN" onclick="tutupDetailBarangV2(); hapusData('${req.noSurat}');">
-        <span class="material-symbols-rounded">delete</span>
-      </button>
-    `);
+    const isCreator = currentUser && (req.userId === currentUser.id || req.createdBy === currentUser.fullName || (currentUser.category === 'TOKO' && req.toko.toUpperCase() === currentUser.fullName.toUpperCase()));
+    const canCreatorEditDelete = isCreator && !req.serviceApprove && req.status === 'PENDING';
+    const canServiceEditDelete = (role === 'SERVICE' && !req.serviceApprove && req.status === 'PENDING');
+    const canAdminEditDelete = isAdminUser;
+
+    if (canCreatorEditDelete || canServiceEditDelete || canAdminEditDelete) {
+      actionButtons.push(`
+        <button type="button" class="btnIcon btnEdit btnIconOnly" title="EDIT" onclick="tutupDetailBarangV2(); editPermintaan('${req.noSurat}');">
+          <span class="material-symbols-rounded">edit</span>
+        </button>
+      `);
+      actionButtons.push(`
+        <button type="button" class="btnIcon btnDelete btnIconOnly" title="HAPUS PERMINTAAN" onclick="tutupDetailBarangV2(); hapusData('${req.noSurat}');">
+          <span class="material-symbols-rounded">delete</span>
+        </button>
+      `);
+    }
   }
 
   const allReqPhotos = [
@@ -6650,30 +6742,33 @@ async function lihatDetail(noSuratOrObj, fromDashboard = false) {
     `;
   }
 
-  const thActionHtml = canServiceRowDelete ? `<th style="${thStyleCenter}">AKSI</th>` : '';
+  const thKetPartHtml = showKetPartCol ? `<th style="${thStyleLeft}">KETERANGAN PART</th>` : '';
+  const thActionHtml = canServiceRowActions ? `<th style="${thStyleAutofit}">AKSI</th>` : '';
 
   const tableHeaderHtml = isDus ? `
     <thead>
       <tr style="background: var(--primary) !important; color: #ffffff !important;">
-        <th style="${thStyleCenter}">NO</th>
-        <th style="${thStyleLeft('14%')}">TYPE</th>
-        <th style="${thStyleLeft('16%')}">SERI BARANG</th>
-        <th style="${thStyleLeft('20%')}">PERMINTAAN</th>
-        <th style="${thStyleLeft('16%')}">SERI DUS</th>
-        <th style="${thStyleLeft('16%')}">ALASAN</th>
-        <th style="${thStyleQty}">QTY</th>
+        <th style="${thStyleAutofit}">NO</th>
+        <th style="${thStyleLeft}">TYPE</th>
+        <th style="${thStyleLeft}">SERI BARANG</th>
+        <th style="${thStyleLeft}">PERMINTAAN</th>
+        <th style="${thStyleLeft}">SERI DUS</th>
+        <th style="${thStyleLeft}">ALASAN</th>
+        <th style="${thStyleAutofit}">QTY</th>
+        ${thKetPartHtml}
         ${thActionHtml}
       </tr>
     </thead>
   ` : `
     <thead>
       <tr style="background: var(--primary) !important; color: #ffffff !important;">
-        <th style="${thStyleCenter}">NO</th>
-        <th style="${thStyleLeft('16%')}">TYPE</th>
-        <th style="${thStyleLeft('18%')}">SERI BARANG</th>
-        <th style="${thStyleLeft('24%')}">PERMINTAAN</th>
-        <th style="${thStyleLeft('22%')}">ALASAN</th>
-        <th style="${thStyleQty}">QTY</th>
+        <th style="${thStyleAutofit}">NO</th>
+        <th style="${thStyleLeft}">TYPE</th>
+        <th style="${thStyleLeft}">SERI BARANG</th>
+        <th style="${thStyleLeft}">PERMINTAAN</th>
+        <th style="${thStyleLeft}">ALASAN</th>
+        <th style="${thStyleAutofit}">QTY</th>
+        ${thKetPartHtml}
         ${thActionHtml}
       </tr>
     </thead>
@@ -6684,7 +6779,7 @@ async function lihatDetail(noSuratOrObj, fromDashboard = false) {
       ${headerInfoHtml}
       
       <div class="tableCardV2 tableWrap" style="display: block !important; border-top: 1px solid var(--border-color) !important; border-bottom: 1px solid var(--border-color) !important; border-left: none !important; border-right: none !important; border-radius: 0 !important; overflow-x: auto !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; touch-action: auto !important; overscroll-behavior: contain !important; max-height: 55vh !important; background: var(--bg-box) !important; width: 100% !important; min-width: 0 !important; max-width: 100% !important; margin: 0 !important; position: relative !important;">
-        <table class="detailTableV2" style="width: 100% !important; min-width: 750px !important; table-layout: auto !important; border-collapse: separate !important; border-spacing: 0 !important; margin: 0 !important; padding: 0 !important;">
+        <table class="detailTableV2" style="width: 100% !important; min-width: 100% !important; table-layout: auto !important; border-collapse: separate !important; border-spacing: 0 !important; margin: 0 !important; padding: 0 !important;">
           ${tableHeaderHtml}
           <tbody>
             ${itemsHtml}
@@ -6709,6 +6804,324 @@ async function lihatDetail(noSuratOrObj, fromDashboard = false) {
   }
   return true;
 }
+
+// ----------------------------------------------------
+// FITUR UPDATE NO & STATUS PART (KHUSUS LOGIN SERVICE / ADMIN)
+// ----------------------------------------------------
+function bukaModalEditStatusPart(noSurat) {
+  if (!noSurat) return;
+  const role = currentUser ? (currentUser.category || '').toUpperCase() : '';
+  const isAdm = currentUser && (role === 'ADMIN' || (currentUser.username && currentUser.username.toUpperCase() === 'ADMIN'));
+  if (role !== 'SERVICE' && !isAdm) {
+    showNotif('FITUR EDIT NO / STATUS PART HANYA DAPAT DIAKSES OLEH KATEGORI SERVICE!', 'warning');
+    return;
+  }
+
+  const requests = getRequestsFromDB();
+  const targetNo = String(noSurat).trim().toUpperCase();
+  const req = requests.find(r => r && (
+    String(r.noSurat || '').trim().toUpperCase() === targetNo ||
+    String(r.id || '').trim().toUpperCase() === targetNo
+  ));
+
+  if (!req) {
+    showNotif('DATA PERMINTAAN TIDAK DITEMUKAN!', 'warning');
+    return;
+  }
+
+  const titleEl = document.getElementById('editStatusPartTitle');
+  if (titleEl) titleEl.textContent = `UPDATE NO & STATUS PART (#${req.noSurat})`;
+
+  const noSuratInput = document.getElementById('editStatusPartNoSurat');
+  if (noSuratInput) noSuratInput.value = req.noSurat;
+
+  const container = document.getElementById('editStatusPartItemsContainer');
+  if (!container) return;
+
+  const items = Array.isArray(req.items) ? req.items : [];
+  if (items.length === 0) {
+    container.innerHTML = '<div style="text-align:center; padding:15px; color:var(--text-muted);">TIDAK ADA ITEM DALAM PERMINTAAN INI.</div>';
+  } else {
+    container.innerHTML = items.map((i, idx) => {
+      const typeVal = i.type || i.tipe || '-';
+      const seriVal = i.seri || i.sn || '-';
+      const barangVal = i.barang || i.permintaan || '-';
+      const currentNoPart = i.noPart || '';
+      const currentStatusPart = i.statusPart || '';
+
+      return `
+        <div style="background: var(--bg-body); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px;">
+            <strong style="font-size: 13px; color: var(--primary);">${idx + 1}. ${typeVal} (SN: ${seriVal})</strong>
+            <span style="font-size: 11px; font-weight: 700; color: var(--text-muted);">${barangVal} (Qty: ${i.qty || 1})</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+              <label style="font-size: 11px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">NO PART / KODE PART</label>
+              <input type="text" id="input_nopart_${idx}" value="${currentNoPart}" placeholder="Contoh: PRT-99210 / BAUT..." style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-box); color: var(--text-main); font-size: 12px; font-weight: 600; box-sizing: border-box;">
+            </div>
+            <div>
+              <label style="font-size: 11px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">STATUS PART</label>
+              <input type="text" id="input_statuspart_${idx}" list="list_statuspart_presets" value="${currentStatusPart}" placeholder="Pilih / Ketik Status..." style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-box); color: var(--text-main); font-size: 12px; font-weight: 600; box-sizing: border-box;">
+              <datalist id="list_statuspart_presets">
+                <option value="READY / TERSEDIA">
+                <option value="PROSES">
+                <option value="INDENT / PESAN">
+                <option value="TERPASANG">
+                <option value="KOSONG / BATAL">
+              </datalist>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  const modal = document.getElementById('popupEditStatusPart');
+  if (modal) {
+    modal.style.setProperty('display', 'flex', 'important');
+    modal.classList.add('show');
+  }
+}
+window.bukaModalEditStatusPart = bukaModalEditStatusPart;
+
+function tutupModalEditStatusPart() {
+  const modal = document.getElementById('popupEditStatusPart');
+  if (modal) {
+    modal.style.setProperty('display', 'none', 'important');
+    modal.classList.remove('show');
+  }
+}
+window.tutupModalEditStatusPart = tutupModalEditStatusPart;
+
+function simpanStatusPart() {
+  const noSuratInput = document.getElementById('editStatusPartNoSurat');
+  const noSurat = noSuratInput ? noSuratInput.value.trim() : '';
+  if (!noSurat) {
+    showNotif('NOMOR SURAT TIDAK VALID!', 'warning');
+    return;
+  }
+
+  showConfirm(`SIMPAN PERUBAHAN NO & STATUS PART UNTUK #${noSurat}?`, () => {
+    try {
+      const requests = getRequestsFromDB();
+      const targetNo = String(noSurat).trim().toUpperCase();
+      const idx = requests.findIndex(r => r && (
+        String(r.noSurat || '').trim().toUpperCase() === targetNo ||
+        String(r.id || '').trim().toUpperCase() === targetNo
+      ));
+
+      if (idx === -1) {
+        showNotif('DATA PERMINTAAN TIDAK DITEMUKAN!', 'warning');
+        return;
+      }
+
+      const items = Array.isArray(requests[idx].items) ? requests[idx].items : [];
+      items.forEach((item, itemIdx) => {
+        const noPartEl = document.getElementById(`input_nopart_${itemIdx}`);
+        const statusPartEl = document.getElementById(`input_statuspart_${itemIdx}`);
+        if (noPartEl) {
+          item.noPart = noPartEl.value.trim().toUpperCase();
+        }
+        if (statusPartEl) {
+          item.statusPart = statusPartEl.value.trim().toUpperCase();
+        }
+      });
+
+      if (!requests[idx].log) requests[idx].log = [];
+      requests[idx].log.push({
+        action: 'UPDATE_STATUS_PART',
+        user: currentUser ? (currentUser.fullName || currentUser.username) : 'SERVICE',
+        notes: `UPDATE NO & STATUS PART OLEH SERVICE`,
+        time: `${getFormattedDateDDMMYYYY()} ${new Date().toLocaleTimeString('id-ID')}`
+      });
+
+      // 1. SIMPAN LOKAL SECARA INSTAN (0 ms)
+      saveRequestsToDB(requests);
+      tutupModalEditStatusPart();
+      showNotif(`NO & STATUS PART #${noSurat} BERHASIL DIPERBARUI!`, 'success');
+      
+      if (typeof loadRiwayat === 'function') loadRiwayat();
+      if (typeof loadDashboard === 'function') loadDashboard();
+      if (typeof lihatDetail === 'function') lihatDetail(noSurat);
+
+      // 2. SINKRONISASI SUPABASE CLOUD DI LATAR BELAKANG
+      const docId = String(noSurat).replace(/[\/\.]/g, '_');
+      if (typeof supabase !== 'undefined' && supabase) {
+        supabase.from('permintaan_toko').update({
+          items: requests[idx].items,
+          log: requests[idx].log,
+          updated_at: new Date().toISOString()
+        }).eq('no_surat', noSurat).then(() => {}, (e) => console.warn('[SUPABASE STATUS PART UPDATE NOTICE]:', e));
+      }
+      if (typeof dbFirestore !== 'undefined' && dbFirestore) {
+        dbFirestore.collection('requests').doc(docId).set(requests[idx], { merge: true }).catch(e => console.warn(e));
+      }
+      if (typeof dbRealtime !== 'undefined' && dbRealtime) {
+        dbRealtime.ref(`requests/${docId}`).set(requests[idx]).catch(e => console.warn(e));
+      }
+    } catch (err) {
+      console.error('[SIMPAN STATUS PART ERROR]:', err);
+      showNotif('GAGAL MENYIMPAN STATUS PART: ' + (err.message || err), 'error');
+    }
+  });
+}
+window.simpanStatusPart = simpanStatusPart;
+
+// ----------------------------------------------------
+// FITUR EDIT KETERANGAN PART PER BARIS (FREE TEXT MANUAL KHUSUS SERVICE / ADMIN)
+// ----------------------------------------------------
+function bukaModalEditKetPartSingle(noSurat, itemIndex) {
+  if (!noSurat) return;
+  const role = currentUser ? (currentUser.category || '').toUpperCase() : '';
+  const isAdm = currentUser && (role === 'ADMIN' || (currentUser.username && currentUser.username.toUpperCase() === 'ADMIN'));
+  if (role !== 'SERVICE' && !isAdm) {
+    showNotif('FITUR EDIT KETERANGAN PART HANYA DAPAT DIAKSES OLEH KATEGORI SERVICE!', 'warning');
+    return;
+  }
+
+  const requests = getRequestsFromDB();
+  const targetNo = String(noSurat).trim().toUpperCase();
+  const req = requests.find(r => r && (
+    String(r.noSurat || '').trim().toUpperCase() === targetNo ||
+    String(r.id || '').trim().toUpperCase() === targetNo
+  ));
+
+  if (!req) {
+    showNotif('DATA PERMINTAAN TIDAK DITEMUKAN!', 'warning');
+    return;
+  }
+
+  const items = Array.isArray(req.items) ? req.items : [];
+  if (itemIndex < 0 || itemIndex >= items.length) {
+    showNotif('ITEM TIDAK DITEMUKAN!', 'warning');
+    return;
+  }
+
+  const item = items[itemIndex];
+  const typeVal = item.type || item.tipe || '-';
+  const seriVal = item.seri || item.sn || '-';
+  const barangVal = item.barang || item.permintaan || '-';
+  const currentKet = item.statusPart || item.keteranganPart || item.noPart || '';
+
+  const titleEl = document.getElementById('editKetPartSingleTitle');
+  if (titleEl) titleEl.textContent = `EDIT KETERANGAN PART (BARIS ${itemIndex + 1})`;
+
+  const noSuratHidden = document.getElementById('editKetPartSingleNoSurat');
+  if (noSuratHidden) noSuratHidden.value = req.noSurat;
+
+  const idxHidden = document.getElementById('editKetPartSingleItemIndex');
+  if (idxHidden) idxHidden.value = itemIndex;
+
+  const infoEl = document.getElementById('editKetPartSingleItemInfo');
+  if (infoEl) {
+    infoEl.innerHTML = `
+      <div style="color: var(--primary); font-size: 13px; font-weight: 800; margin-bottom: 2px;">#${req.noSurat} - Baris ${itemIndex + 1}</div>
+      <div style="color: var(--text-main); font-size: 12px; font-weight: 600;">Item: <strong>${barangVal}</strong> | Type: <strong>${typeVal}</strong> (SN: ${seriVal})</div>
+    `;
+  }
+
+  const inputEl = document.getElementById('editKetPartSingleInput');
+  if (inputEl) {
+    inputEl.value = currentKet;
+    setTimeout(() => inputEl.focus(), 150);
+  }
+
+  const modal = document.getElementById('popupEditKeteranganPartSingle');
+  if (modal) {
+    modal.style.setProperty('display', 'flex', 'important');
+    modal.classList.add('show');
+  }
+}
+window.bukaModalEditKetPartSingle = bukaModalEditKetPartSingle;
+
+function tutupModalEditKetPartSingle() {
+  const modal = document.getElementById('popupEditKeteranganPartSingle');
+  if (modal) {
+    modal.style.setProperty('display', 'none', 'important');
+    modal.classList.remove('show');
+  }
+}
+window.tutupModalEditKetPartSingle = tutupModalEditKetPartSingle;
+
+function simpanKeteranganPartSingle() {
+  const noSuratHidden = document.getElementById('editKetPartSingleNoSurat');
+  const idxHidden = document.getElementById('editKetPartSingleItemIndex');
+  const inputEl = document.getElementById('editKetPartSingleInput');
+
+  const noSurat = noSuratHidden ? noSuratHidden.value.trim() : '';
+  const itemIndex = idxHidden ? parseInt(idxHidden.value, 10) : -1;
+  const newKet = inputEl ? inputEl.value.trim().toUpperCase() : '';
+
+  if (!noSurat || itemIndex < 0) {
+    showNotif('DATA TIDAK VALID!', 'warning');
+    return;
+  }
+
+  try {
+    const requests = getRequestsFromDB();
+    const targetNo = String(noSurat).trim().toUpperCase();
+    const idx = requests.findIndex(r => r && (
+      String(r.noSurat || '').trim().toUpperCase() === targetNo ||
+      String(r.id || '').trim().toUpperCase() === targetNo
+    ));
+
+    if (idx === -1) {
+      showNotif('DATA PERMINTAAN TIDAK DITEMUKAN!', 'warning');
+      return;
+    }
+
+    const items = Array.isArray(requests[idx].items) ? requests[idx].items : [];
+    if (itemIndex >= items.length) {
+      showNotif('ITEM TIDAK DITEMUKAN!', 'warning');
+      return;
+    }
+
+    // SIMPAN KE STATUS PART & KETERANGAN PART
+    items[itemIndex].statusPart = newKet;
+    items[itemIndex].keteranganPart = newKet;
+    requests[idx].items = items;
+
+    const targetItemName = items[itemIndex].barang || items[itemIndex].permintaan || `Baris ${itemIndex + 1}`;
+
+    if (!requests[idx].log) requests[idx].log = [];
+    requests[idx].log.push({
+      action: 'UPDATE_KETERANGAN_PART_BARIS',
+      user: currentUser ? (currentUser.fullName || currentUser.username) : 'SERVICE',
+      notes: `Update keterangan part item '${targetItemName}': ${newKet || '(dikosongkan)'}`,
+      time: `${getFormattedDateDDMMYYYY()} ${new Date().toLocaleTimeString('id-ID')}`
+    });
+
+    // 1. SIMPAN LOKAL SECARA INSTAN (0 ms)
+    saveRequestsToDB(requests);
+    tutupModalEditKetPartSingle();
+    showNotif(`KETERANGAN PART '${targetItemName}' BERHASIL DISIMPAN!`, 'success');
+
+    if (typeof loadRiwayat === 'function') loadRiwayat();
+    if (typeof loadDashboard === 'function') loadDashboard();
+    if (typeof lihatDetail === 'function') lihatDetail(noSurat);
+
+    // 2. SINKRONISASI SUPABASE CLOUD DI LATAR BELAKANG
+    const docId = String(noSurat).replace(/[\/\.]/g, '_');
+    if (typeof supabase !== 'undefined' && supabase) {
+      supabase.from('permintaan_toko').update({
+        items: requests[idx].items,
+        log: requests[idx].log,
+        updated_at: new Date().toISOString()
+      }).eq('no_surat', noSurat).then(() => {}, (e) => console.warn('[SUPABASE STATUS PART UPDATE NOTICE]:', e));
+    }
+    if (typeof dbFirestore !== 'undefined' && dbFirestore) {
+      dbFirestore.collection('requests').doc(docId).set(requests[idx], { merge: true }).catch(e => console.warn(e));
+    }
+    if (typeof dbRealtime !== 'undefined' && dbRealtime) {
+      dbRealtime.ref(`requests/${docId}`).set(requests[idx]).catch(e => console.warn(e));
+    }
+  } catch (err) {
+    console.error('[SIMPAN KETERANGAN PART SINGLE ERROR]:', err);
+    showNotif('GAGAL MENYIMPAN KETERANGAN PART: ' + (err.message || err), 'error');
+  }
+}
+window.simpanKeteranganPartSingle = simpanKeteranganPartSingle;
 
 // LISTEN FOR MOBILE DEVICE / BROWSER BACK BUTTON TO CLOSE POPUP DETAIL
 window.addEventListener('popstate', (e) => {
@@ -7153,11 +7566,11 @@ function bukaPdfModal(noSurat) {
             <thead>
               <tr style="background: ${tableHeaderBg}; color: #ffffff;">
                 <th style="width: 28px; text-align:center; padding:6px 4px; border:1px solid #cbd5e1;">NO</th>
-                <th style="padding:6px 6px; border:1px solid #cbd5e1; text-align:left;">TIPE BARANG</th>
-                <th style="padding:6px 6px; border:1px solid #cbd5e1; text-align:left;">NO. SERI</th>
-                ${req.jenis === 'DUS' ? `<th style="padding:6px 6px; border:1px solid #cbd5e1; text-align:left;">NO. SERI DUS</th>` : ''}
-                <th style="padding:6px 6px; border:1px solid #cbd5e1; text-align:left;">PERMINTAAN BARANG</th>
-                <th style="padding:6px 6px; border:1px solid #cbd5e1; text-align:left;">ALASAN PERMINTAAN</th>
+                <th style="padding:6px 6px; border:1px solid #cbd5e1; text-align:center;">TIPE BARANG</th>
+                <th style="padding:6px 6px; border:1px solid #cbd5e1; text-align:center;">NO. SERI</th>
+                ${req.jenis === 'DUS' ? `<th style="padding:6px 6px; border:1px solid #cbd5e1; text-align:center;">NO. SERI DUS</th>` : ''}
+                <th style="padding:6px 6px; border:1px solid #cbd5e1; text-align:center;">PERMINTAAN BARANG</th>
+                <th style="padding:6px 6px; border:1px solid #cbd5e1; text-align:center;">ALASAN PERMINTAAN</th>
                 <th style="width: 38px; text-align:center; padding:6px 4px; border:1px solid #cbd5e1;">QTY</th>
               </tr>
             </thead>
